@@ -2,7 +2,7 @@
 
 **Last updated**: 2026-05-31
 **Branch**: `T-API-004-delete-ride-backend`
-**Audit result**: 161/161 PASS — idempotent (verified on 2 consecutive runs)
+**Audit result**: 179/179 PASS — idempotent (verified on 2 consecutive runs)
 
 ---
 
@@ -10,113 +10,127 @@
 
 ### Architecture
 
-- Restructured to `backend/domains/<domain>/` architecture (T-API-001 ✅)
+- `backend/domains/<domain>/` restructure (T-API-001 ✅)
 - All ride/trip/negotiation/payout code deleted (T-API-004..008 ✅)
-- NegoRide → LinkUp rebrand complete (T-ID-001 ✅)
+- NegoRide → LinkUp rebrand (T-ID-001 ✅)
+- Cloudflare R2 storage with local fallback (T-API-012 ✅)
+- Interest Graph weighted Jaccard scoring engine (no pgvector needed yet)
 - Flask 3.0, SQLAlchemy, Flask-JWT-Extended, Flask-SocketIO (eventlet)
-- Cloudflare R2 storage client with local fallback (T-API-012 ✅)
-- Interest Graph scoring engine — weighted Jaccard across 8 dimensions (no pgvector needed yet)
+
+### DB Tables (lu_*)
+
+| Table | Description |
+| --- | --- |
+| lu_accounts, lu_account_devices | Auth + push device tokens |
+| lu_otp_requests, lu_refresh_tokens | OTP and token lifecycle |
+| lu_professional_profiles, lu_dating_profiles | Dual-persona profiles |
+| lu_education, lu_experience, lu_certifications | CV data |
+| lu_interest_tags, lu_interest_profiles | 8-dimension Interest Graph |
+| lu_links | Professional connections |
+| lu_sparks, lu_matches | Dating actions + mutual matches |
+| lu_hubs, lu_hub_memberships | Communities |
+| lu_hub_posts, lu_hub_post_likes, lu_hub_post_comments | Social content |
+| lu_threads, lu_thread_participants, lu_messages, lu_message_reactions | Chat |
+| lu_jobs, lu_applications, lu_saved_jobs | Job listings |
+| lu_events, lu_event_rsvps | Events |
+| lu_notifications | In-app notifications |
+| lu_blocks, lu_reports | Safety |
+| lu_locations, lu_institutions, lu_orgs | Reference data |
+| lu_verifications | KYC verification records |
 
 ### v1 Domain APIs — all tested in audit
 
 | Domain | Key Endpoints |
 | --- | --- |
 | **Identity** | register, otp/*, login, me GET/PUT, logout, refresh, device, password |
-| **Profile** | me CRUD, @handle, compatibility/:id, photo (R2), education/experience/certifications CRUD, dating GET/PUT (discoverability + age), completion |
-| **Interests** | taxonomy, search, me GET/POST, remove/:id, suggestions, signal (behavioral) |
-| **Links** | list, request/accept/decline/remove, requests, suggestions (Interest Graph scored) |
-| **Hubs** | list/create/:id GET/PUT, join/leave, members, posts GET/POST/DELETE, post like/unlike, post likes list |
-| **Jobs** | list, mine, saved, applications (mine), post/:id GET/PUT/close, apply, save, applicants |
-| **Events** | list, mine, going, create/:id GET/PUT/DELETE, attendees (status filter), rsvp |
-| **Chat** | threads list/create/:id, messages GET/POST, message react/reactions, read |
-| **Sparks** | deck (Interest Graph + safety + age/gender/discoverability filters), action, matches, matches/:id |
+| **Profile** | me CRUD, @handle, compatibility/:id, photo (R2), education/experience/certifications CRUD, dating GET/PUT/DELETE (soft+hard), completion |
+| **Interests** | taxonomy, search, me GET/POST, remove/:id, suggestions, signal (behavioral), me?with_decay |
+| **Links** | list, :id GET, request/accept/decline/remove, requests, suggestions (Interest Graph scored) |
+| **Hubs** | list/create/:id GET/PUT, join/leave, members, posts GET/POST/PUT/DELETE, post likes, post comments CRUD |
+| **Jobs** | list, mine, saved, applications, post/:id GET/PUT/close, apply, save, applicants |
+| **Events** | list, mine, going, create/:id GET/PUT/DELETE, attendees, rsvp |
+| **Chat** | threads list/create/:id, messages GET/POST/DELETE (24h window), reactions, read |
+| **Sparks** | deck (scored + refresh), action, matches, matches/:id/unmatch, matches/:id/met |
 | **Notifications** | list, unread-count, :id/read, read-all |
 | **Safety** | blocks list/create/:id/delete, report |
 | **Search** | people (bio/headline, blocks filtered), hubs (description), jobs (description) |
 | **Reference** | locations, institutions, orgs (all public) |
 
-### Interest Graph Scoring (`backend/shared/scoring/interest_graph.py`)
+### Interest Graph Scoring
 
-Weighted Jaccard similarity across all 8 dimensions — runs on MySQL, no pgvector needed.
+- Weighted Jaccard across 8 dimensions — MySQL-native, no pgvector needed
+- Professional weights: professional_domain ×3, education ×2.5, geography ×2, ...
+- Dating weights: relationship_intent ×4, causes_values ×2.5, lifestyle ×2.5, ...
+- Applied to: Sparks deck ranking, Links suggestions, profile compatibility breakdown
+- Weight decay on read: `w × (1 - rate)^months` — explicit 0.01/mo, behavioral 0.02/mo
 
-**Applied everywhere:**
+### Sparks Deck Quality (all filters in one pass)
 
-- **Sparks deck** — ranked by dating weights (relationship_intent × 4, causes_values × 2.5, lifestyle × 2.5, …)
-- **Links suggestions** — ranked by professional weights (professional_domain × 3, education × 2.5, …)
-- **Profile compatibility** — `GET /v1/profile/compatibility/:id?mode=professional|dating` — full dimension breakdown with shared tag IDs (explainability)
-
-### Sparks Deck Quality
-
-Deck filters applied (all in one pass):
-
-1. **Already acted on** — excluded
-2. **Blocked (bidirectional)** — excluded
-3. **Heavily reported (≥3 reports)** — excluded
-4. **Discoverability** — `paused` and `incognito` profiles excluded
-5. **Age preference** — actor's age_min/max vs candidate's birth_year, AND candidate's preferences vs actor's age
-6. **Gender preference** — soft filter applied when both sides have data
-7. **Interest Graph ranking** — remaining candidates scored and sorted (dating weights)
+1. Already acted-on (or only spark_up/standout if `?refresh=true`)
+2. Blocked (bidirectional)
+3. Heavily reported (≥3 reports)
+4. Discoverability = paused or incognito
+5. Age preference hard filter (both directions, if birth_year set)
+6. Gender preference soft filter (if both sides have data)
+7. Interest Graph ranking (dating weights)
 
 ### Social Features
 
-**Hub post likes** (`lu_hub_post_likes` table):
+**Hub post comments** (`lu_hub_post_comments`):
 
-- `POST /v1/hubs/:id/posts/:id/like` — toggle (like / unlike)
-- `GET /v1/hubs/:id/posts/:id/likes` — list with account details
-- `like_count` on `HubPost` maintained in sync
-- Notification fired to post author on like (not on self-like)
+- POST/GET/PUT/DELETE on comments; replies via parent_id
+- comment_count maintained; notification to post author
+- Non-member guard; soft-delete shows `[Comment deleted]`
 
-**Message reactions** (`lu_message_reactions` table):
+**Hub post likes** (`lu_hub_post_likes`):
 
-- `POST /v1/threads/:id/messages/:id/react` — toggle emoji reaction
-- `GET /v1/threads/:id/messages/:id/reactions` — grouped by emoji with count + top reactors
-- UNIQUE constraint: one emoji per user per message
-- Supports any emoji (up to 10 chars)
+- Toggle like/unlike; like_count maintained; notification to author
 
-### Behavioral Interest Signals
+**Message reactions** (`lu_message_reactions`):
 
-`POST /v1/interests/signal`:
+- Toggle emoji reactions; grouped summary with counts + top reactors
 
-- Mobile calls this when user engages (job view, hub visit, profile click, search)
-- Reinforces existing interest weight (`+strength`, capped at 1.0)
-- Creates new implicit interest (source=`behavioral`) if tag not yet in profile
-- Pinned interests are never modified by signals
-- Increments tag popularity counter
+**Message delete/unsend**:
 
-### Cloudflare R2 Storage (T-API-012)
+- Sender can delete within 24h; body replaced with `[Message deleted]`
 
-`backend/shared/storage/r2.py`:
+### Match Management
 
-- Same interface as `local.py` (`save_upload`, `get_url`)
-- Reads `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL` from environment
-- Falls back to local `backend/uploads/` transparently in dev (credentials absent)
-- Profile photo upload now uses R2 client
-- `.env.example` updated with all R2 variables
+- `POST /v1/sparks/matches/:id/unmatch` — soft unmatch, notifies other party
+- `POST /v1/sparks/matches/:id/met` — ML outcome signal (met in real life)
+- Match states: `active` | `unmatched` | `expired`
 
-### Account Settings
+### Dating Profile
 
-- `PUT /v1/auth/me` — display_name, email (uniqueness check), modes_enabled (at-least-one guard)
-- `POST /v1/auth/password` — current-password verified, minimum 8 chars
+- `discoverability`: `discoverable` | `paused` | `incognito`
+- `birth_year` → age derived on read
+- `gender` + `looking_for_gender` for soft deck filtering
+- `DELETE /v1/profile/me/dating` — soft pause OR `?permanent=true` for hard delete
 
 ### Notifications
 
-- In-app notifications created on: message send, link request/accept, spark match, post like
-- OneSignal push in background thread (non-blocking) if device registered
-- `GET /v1/notifications/unread-count` — lightweight badge count
-- `POST /v1/notifications/:id/read` — single-notification read
-- `POST /v1/notifications/read-all` — bulk clear
+- In-app + OneSignal push (non-blocking) on: message, link request/accept, match, post like, comment
+- Badge count, single-read, bulk read-all
+- Notification types: `message.sent`, `link.requested`, `link.accepted`, `spark.match`, `spark.unmatched`, `post.liked`, `post.commented`
 
-### Seed Data (20 members, idiomatic Ugandan data)
+### Behavioral Interest Signals
 
-- 20 accounts (samuel-ocen is admin)
-- 43 interest tags across 8 dimensions
-- 10 dating profiles with birth_year, gender, looking_for_gender, discoverability
-- 5 hubs, 10 jobs, 3 events, threads, links, sparks, hub post likes
+- `POST /v1/interests/signal` — mobile reinforces on job_view, hub_visit, profile_view, etc.
+- Reinforces weight (+strength, cap 1.0), creates implicit if new
+- `GET /v1/interests/me?with_decay=true` — shows effective_weight after time-based decay
 
-### Legacy Backward Compat (`/api/*`)
+### Cloudflare R2 (T-API-012)
 
-- Auth, profile, wallet, chat, webhooks, admin, calls, ratings, Flutterwave routes preserved
-- v1 tokens work on legacy admin via `_AccountWrapper`
+- `backend/shared/storage/r2.py` — R2 + local fallback
+- Profile photo upload uses R2 (falls back to local in dev)
+- Env vars: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL`
+
+### Seed Data
+
+- 20 members (samuel-ocen = admin)
+- 43 interest tags, 10 dating profiles (birth_year, gender, discoverability)
+- 5 hubs with posts + comment threads + likes
+- 10 jobs, 3 events, 2 direct threads, 10 links, sparks data
 
 ---
 
@@ -126,60 +140,62 @@ Deck filters applied (all in one pass):
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| **T-API-012 R2** | Code done ✅ | Needs `R2_*` env vars in `.env` for production |
-| **T-DEC-003 PostgreSQL** | Not started | ~2 week migration; unblocks pgvector + embeddings |
-| **T-DEC-007 Celery + Redis** | Not started | Needed for ML training jobs, bulk push fanout |
+| **T-API-012 R2** | Code done ✅ | Set `R2_*` env vars in production `.env` |
+| **T-DEC-003 PostgreSQL** | Not started | ~2 weeks; unblocks pgvector + embeddings |
+| **T-DEC-007 Celery + Redis** | Not started | Needed for bulk push fanout, scheduled decay, ML jobs |
 
 ### Interest Graph — Phase 2
 
-- **Embeddings** — requires pgvector (PostgreSQL) for semantic similarity beyond explicit tags
-- **Behavioral weight decay** — weights should decay over time if not reinforced (currently static)
-- **Training data export** — need Celery job to export engagement events for ML training
+- **Embedding-based ANN** — requires pgvector (PostgreSQL); upgrade Jaccard to cosine similarity on `vector(384)` embeddings
+- **Persistent weight decay** — currently on-read only; needs Celery job to periodically write decayed weights back to DB
+- **Training data export** — Celery job to export `lu_interest_profiles` + engagement events for ML training
 
-### Sparks Deck Gaps
+### Sparks
 
-- Distance-based filtering (requires live GPS data from mobile)
-- "Have we met?" outcome signal (post-match engagement feedback for ML)
-- Deck refresh strategy (when all candidates exhausted, allow re-sees of `pass` actions)
+- **Distance filtering** — requires live GPS from mobile (no lat/lng on Account currently)
+- **Deck exhaustion strategy** — `?refresh=true` exists; should auto-apply after N days instead of explicit param
+- **Incognito premium tier** — `discoverability=incognito` stored but not yet gated behind LinkUp+
 
 ### Missing Platform Endpoints
 
-- `DELETE /v1/profile/me/dating` — remove dating profile (pause vs permanent delete)
-- `GET /v1/hubs/:id/posts/:id/comments` + `POST` — hub post comments
-- `DELETE /v1/threads/:id/messages/:id` — message delete/unsend
-- `GET /v1/links/:id` — link detail
-- `PUT /v1/hubs/:id/posts/:id` — edit a post
-- KYC level advancement (currently hardcoded at 1)
-- Admin console rebuild (T-API-036)
+- `GET /v1/hubs/:id/posts/:id` — single post detail with comments
+- `GET /v1/profile/@handle/posts` — a member's public hub activity
+- `PUT /v1/profile/me/interests/:tag_id` — update single interest weight/mode
+- `GET /v1/links/mutual/:account_id` — mutual connections between two accounts
+- KYC level advancement endpoint
 
 ### Phase 2/3
 
 - Mentorship, referrals, certificate verification
 - Dating safety toolkit (share-date, photo verify, panic)
-- Wallet + MoMo integration (Flutterwave service exists)
+- Wallet + MoMo integration (Flutterwave service exists, wallet routes preserved)
 - Hub types: institution-linked alumni, org-linked communities
+- Admin console rebuild (T-API-036)
 
 ---
 
 ## How to Run
 
 ```bash
-# Development setup
+# Development
 source venv/bin/activate
-python -m backend.seed      # seed all lu_* tables idempotently
-python run.py               # start on :5001
+python -m backend.seed          # idempotent seed
+python run.py                   # :5001
 
-# Run migration 0010 (if fresh DB)
+# Apply migrations (if starting fresh)
 python -c "
 from backend.app import create_app; app = create_app()
 with app.app_context():
     from backend.models import db; import importlib.util
-    spec = importlib.util.spec_from_file_location('m', 'backend/database/migrations/0010_hub_post_likes_and_message_reactions.py')
-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-    conn = db.engine.raw_connection(); m.up(conn); conn.close(); print('Done')
+    for mfile in ['0010_hub_post_likes_and_message_reactions.py',
+                  '0011_hub_post_comments_and_match_extras.py']:
+        spec = importlib.util.spec_from_file_location('m', f'backend/database/migrations/{mfile}')
+        m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+        conn = db.engine.raw_connection(); m.up(conn); conn.close()
+    print('Migrations done')
 "
 
-# Full audit (161 tests, ~2 min)
+# Full audit (179 tests, ~3 min)
 python audit.py
 ```
 
@@ -190,7 +206,7 @@ python audit.py
 
 ## Architecture Reference
 
-All canonical docs: `/Users/mac/Desktop/github/linkup-mobo/`
+Canonical docs: `/Users/mac/Desktop/github/linkup-mobo/`
 
 - `ABOUT.md` — product vision, Interest Graph concept
 - `ARCHITECTURE.md` — tech stack, ML pipeline, infra

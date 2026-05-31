@@ -1,106 +1,146 @@
 # LinkUp API — Phase 0 Status
 
-**Last updated**: 2026-05-31  
-**Branch**: `T-API-004-delete-ride-backend`  
-**Audit result**: 74/74 PASS (idempotent — verified on 2 consecutive runs)
+**Last updated**: 2026-05-31
+**Branch**: `T-API-004-delete-ride-backend`
+**Audit result**: 106/106 PASS — idempotent (verified on 2 consecutive runs)
 
 ---
 
 ## What Has Been Done
 
 ### Architecture
-- Backend restructured to `backend/domains/<domain>/` architecture (T-API-001 complete)
-- All ride/trip/negotiation/payout backend code deleted (T-API-004..008 complete)
-- NegoRide → LinkUp rebrand complete (T-ID-001 complete)
 
-### v1 Domain APIs (`/v1/*`)
+- Backend restructured to `backend/domains/<domain>/` architecture (T-API-001 ✅)
+- All ride/trip/negotiation/payout backend code deleted (T-API-004..008 ✅)
+- NegoRide → LinkUp rebrand complete (T-ID-001 ✅)
+- Flask 3.0, SQLAlchemy, Flask-JWT-Extended, Flask-SocketIO (eventlet), Flutterwave, OneSignal
 
-| Domain | Endpoints | Status |
-|--------|-----------|--------|
-| **Identity** | `/v1/auth/register`, `/v1/auth/otp/*`, `/v1/auth/login`, `/v1/auth/me`, `/v1/auth/logout`, `/v1/auth/refresh` | ✅ Complete |
-| **Profile** | `/v1/profile/me` (GET/PUT/DELETE), `/@handle`, `/me/education`, `/me/experience`, `/me/dating`, `/completion` | ✅ Complete |
-| **Interests** | `/v1/interests/taxonomy`, `/search`, `/me`, `/suggestions` | ✅ Complete |
-| **Links** | `/v1/links` (list/request/accept/decline/remove), `/requests`, `/suggestions` | ✅ Complete |
-| **Hubs** | `/v1/hubs` (CRUD), `/:id/join`, `/leave`, `/posts`, `/members` | ✅ Complete |
-| **Jobs** | `/v1/jobs` (CRUD), `/apply`, `/save`, `/mine` | ✅ Complete |
-| **Events** | `/v1/events` (CRUD), `/:id/rsvp` | ✅ Complete |
-| **Chat** | `/v1/threads` (list/create), `/:id/messages` (GET/POST), `/:id/read` | ✅ Complete |
-| **Sparks** | `/v1/sparks/deck`, `/action`, `/matches` | ✅ Complete |
-| **Notifications** | `/v1/notifications` (list/read/read-all) | ✅ Complete |
-| **Safety** | `/v1/safety/blocks` (list/block/unblock), `/report` | ✅ Complete |
-| **Search** | `/v1/search/people`, `/hubs`, `/jobs` | ✅ Complete |
-| **Reference** | `/v1/reference/locations`, `/institutions`, `/orgs` (all public, no auth) | ✅ Complete |
+### v1 Domain APIs (`/v1/*`) — all tested in audit
 
-### Cross-Domain Notifications (added this session)
-- Chat: message send → notifies all other thread participants
-- Links: link request → notifies target; link accepted → notifies requester
-- Sparks: match → notifies both accounts
+| Domain | Endpoints | Notes |
+| --- | --- | --- |
+| **Identity** | register, otp/request, otp/verify, login, me, logout, refresh, device | `device` = OneSignal push registration |
+| **Profile** | me GET/PUT/DELETE, @handle, photo, education CRUD, experience CRUD, certifications CRUD, dating GET/PUT, completion | Soft-delete reactivates on re-registration |
+| **Interests** | taxonomy, search, me GET/POST, remove/:id, suggestions | 8-dimension taxonomy, 43 seed tags |
+| **Links** | list, request, requests list, :id/accept, :id/decline, :id/remove, suggestions | Notifications on request + accept |
+| **Hubs** | list, create, :id GET/PUT, join, leave, members, posts GET/POST, posts/:id DELETE | Join/leave/rejoin/double-join all tested |
+| **Jobs** | list, mine, post, :id GET, apply, save | Referral flag, seniority, currency |
+| **Events** | list, create, :id GET, :id/rsvp (going/maybe/not_going) | |
+| **Chat** | threads list/create, :id GET, messages GET/POST, read | Notifications on message send |
+| **Sparks** | deck, action (spark_up/pass/standout/undo), matches, matches/:id | Match auto-creates spark thread |
+| **Notifications** | list, :id/read, read-all | In-app + OneSignal push (non-blocking) |
+| **Safety** | blocks list/create/:id/delete, report | |
+| **Search** | people, hubs, jobs | Full-text search |
+| **Reference** | locations, institutions, orgs | Public — no auth required |
+
+### Cross-Domain Wiring
+
+- **Message sent** → notification to all other thread participants
+- **Link requested** → notification to target
+- **Link accepted** → notification to requester
+- **Spark match** → notification to both accounts + auto-creates dating thread
+- **All notifications** → fire OneSignal push in background thread if device registered
+
+### Push Notifications
+
+- `POST /v1/auth/device` — mobile client registers OneSignal player_id + platform
+- `AccountDevice` model stores player_ids per account
+- Non-blocking: push fires in daemon thread so API response never blocks
+
+### Sparks (dating mode)
+
+- Deck: returns accounts with dating profiles + sparks mode enabled, excluding already-acted-on
+- Match: mutual spark_up/standout → auto-creates `type='spark'` `mode='dating'` thread
+- Seed: 10 dating profiles with bios, intents, lifestyle data
+- Seed mutual match (Samuel ↔ Aisha) + pre-spark (Henry → Samuel) for audit testing
 
 ### Account Lifecycle
-- Soft-delete via `DELETE /v1/profile/me` (sets `deleted_at`, `account_status='closed'`)
-- Re-registration of closed accounts works: `otp_verify` reactivates instead of re-creating (avoids phone unique constraint violation)
+
+- Soft-delete: `DELETE /v1/profile/me` → `deleted_at + account_status='closed'`
+- Re-register: `otp_verify` reactivates closed account (avoids phone UNIQUE constraint)
+
+### Seed Data (20 members, idiomatic Ugandan data)
+
+- 20 accounts (samuel-ocen is `is_admin=1` for legacy admin tests)
+- 43 interest tags across 8 dimensions
+- 10 dating profiles with realistic bios
+- 5 hubs with members + posts
+- 10 jobs, 3 events, 2 threads, 10 links, spark data
 
 ### Legacy Backward Compat (`/api/*`)
-- Auth, profile, wallet, chat, webhooks, admin, calls, ratings, Flutterwave routes preserved
-- `GET /api/admin/system/health` and `GET /api/admin/dashboard` working with v1 JWT tokens (samuel-ocen is `is_admin=1`)
 
-### Infrastructure
-- Health endpoint: `GET /v1/health`
-- MAMP MySQL socket (development) + TCP fallback
-- Flutterwave payment service, OneSignal notifications, Socket.IO call signaling
-- Seed data: 20 Ugandan member accounts, 43 interest tags, 5 hubs, 10 jobs, 3 events, threads, links
+- Auth, profile, wallet, chat, webhooks, admin, calls, ratings, Flutterwave routes preserved
+- v1 JWT tokens work on `/api/admin/*` via `_AccountWrapper` (is_admin=1 → 'Admin' user_type)
 
 ---
 
 ## What Is Remaining
 
-### Phase 1 Priorities
-| Task | Description |
-|------|-------------|
-| **T-API-012** | Uploads → Cloudflare R2 (currently stored locally) |
-| **T-DEC-003** | DB migration MySQL → PostgreSQL (needed for pgvector/Interest Graph) |
-| **T-DEC-007** | Add Celery + Redis async queue for notifications, ML jobs |
-| **Sparks deck** | `/v1/sparks/deck` returns 0 cards for samuel-ocen (he has sparks enabled but the deck algorithm needs Interest Graph data from more users) |
-| **Calling** | Socket.IO WebRTC call signaling works (legacy) but needs v1 integration |
+### Phase 1 — Next Priority
 
-### Phase 2 (ML / Interest Graph)
-- `lu_interest_profiles` + `lu_interest_tags` schema is in place
-- Interest Graph matching algorithm (8 dimensions) not yet implemented
-- Recommendation engine for Links/Sparks deck not yet implemented
+| Task ID | Description | Blocker |
+| --- | --- | --- |
+| **T-API-012** | File uploads → Cloudflare R2 (currently stored locally at `backend/uploads/`) | Need R2 credentials |
+| **T-DEC-003** | DB migration MySQL → PostgreSQL | Required for pgvector/Interest Graph |
+| **T-DEC-007** | Celery + Redis async queue | Required for ML jobs, bulk notifications |
 
-### Phase 3 (Platform)
+### Interest Graph (Phase 2)
+
+- Schema in place: `lu_interest_profiles` + `lu_interest_tags`
+- 8-dimension taxonomy seeded (professional_domain, geography_mobility, lifestyle, etc.)
+- Matching algorithm (cosine similarity across dimensions) **not yet implemented**
+- Sparks deck currently sorts by `created_at desc` — should score by Interest Graph
+
+### Sparks deck improvements
+
+- Currently returns profiles ordered by creation date
+- Should score by Interest Graph overlap (8 dimensions) × age preference match
+- Blocked profiles + reports not yet applied to deck filter
+
+### Platform (Phase 3)
+
+- `POST /v1/profile/me/photo` — endpoint exists, needs actual storage (currently local)
+- `GET /v1/profile/@handle` — public view works; need to respect `visibility_mode='private'` on dating profile
+- Mentorship, referrals, certificate verification features
 - Admin console rebuild (T-API-036)
-- Mentorship, referrals, certificates features
-- Push notifications via OneSignal (service exists, not wired to account devices)
-- Media upload pipeline to R2
+- KYC level advancement (currently hardcoded at 1)
 
-### Known Minor Issues
-- `GET /v1/sparks/deck` returns 0 cards on fresh seed (expected — needs more accounts with sparks enabled and dating profiles)
-- Job/event counts accumulate across audit runs (test data not fully cleaned between runs — expected behavior)
-- `GET /v1/profile/completion` capped at 90% — missing fields logic needs review
+### Known Minor Items
+
+- Profile completion caps at 90% without avatar — correct behavior; avatar upload works but needs storage backend
+- `GET /v1/sparks/deck` returns fewer cards on repeated audit runs (acted-on accounts excluded — correct)
+- `GET /v1/interests/search` returns exact tag matches only — fuzzy search would improve UX
+- Job/event counts grow across audit runs (test data accumulates — acceptable for dev)
 
 ---
 
 ## How to Run
 
 ```bash
-# Development
+# Clean start
 source venv/bin/activate
-python -m backend.seed   # seed fresh data
-python run.py            # start server on :5001
+python -m backend.seed        # seeds all lu_* tables idempotently
+python run.py                 # starts on :5001
 
-# Audit all endpoints
+# Full audit (106 tests, ~60s)
 source venv/bin/activate && python audit.py
 ```
 
-**Test credentials**: phone `+256700000001`, OTP `123456` (dev mode — any OTP request generates `123456`)
+**Test credentials**: phone `+256700000001`, OTP `123456` (dev fixed OTP — always valid)
+**Admin**: samuel-ocen (`is_admin=1`) — works on both `/v1/` and legacy `/api/admin/` routes
 
 ---
 
 ## Architecture Reference
 
-All canonical docs live in `/Users/mac/Desktop/github/linkup-mobo/`:
-- `ABOUT.md` — product vision
-- `ARCHITECTURE.md` — tech stack
-- `CORE_DATA_MODEL.md` — all entities
-- `MIGRATION_PLAN.md` — full task backlog (T-MOB-###, T-API-###, T-DEC-###)
+Canonical docs in `/Users/mac/Desktop/github/linkup-mobo/`:
+
+- `ABOUT.md` — product vision, Uganda-first, Interest Graph concept
+- `ARCHITECTURE.md` — full tech stack, ML pipeline, infra
+- `CORE_DATA_MODEL.md` — all entities (Account, Profile, Interest, Link, Spark, Hub, Job…)
+- `MIGRATION_PLAN.md` — task backlog with IDs (T-MOB-###, T-API-###, T-DEC-###)
+- `DESIGN_GUIDELINES.md` — canonical design system v1.0.0
+
+## Forbidden Strings (build gate)
+
+`truckeroo truck rideshare negoride ride trip driver negotiation vehicle boda ambulance cargo delivery pickup dropoff fare passenger payout`

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def create_notification(account_id: str, notif_type: str, title: str, body: str = None,
                         data: dict = None, action_url: str = None) -> Notification:
-    """Create an in-app notification record."""
+    """Create an in-app notification record and fire a push if the account has a device token."""
     notif = Notification(
         id=str(uuid.uuid4()),
         account_id=account_id,
@@ -25,6 +25,25 @@ def create_notification(account_id: str, notif_type: str, title: str, body: str 
     )
     db.session.add(notif)
     db.session.commit()
+
+    # Fire OneSignal push in background thread (non-blocking) if device tokens exist
+    try:
+        from backend.domains.identity.models import AccountDevice
+        devices = AccountDevice.query.filter_by(account_id=account_id).filter(
+            AccountDevice.onesignal_player_id.isnot(None)
+        ).all()
+        player_ids = [d.onesignal_player_id for d in devices if d.onesignal_player_id]
+        if player_ids:
+            import threading
+            threading.Thread(
+                target=push_onesignal,
+                args=(player_ids, title, body or ''),
+                kwargs={'data': data},
+                daemon=True,
+            ).start()
+    except Exception as e:
+        logger.warning(f'[Notification] Push dispatch failed for {account_id}: {e}')
+
     return notif
 
 

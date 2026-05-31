@@ -4,6 +4,7 @@ Run: source venv/bin/activate && python -m backend.seed
 """
 import uuid, json, logging, bcrypt
 from datetime import datetime, timedelta
+from sqlalchemy import or_
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -364,6 +365,72 @@ def _run_seed():
                                  is_online=is_online, max_attendees=200, created_at=days_ago(5)))
     db.session.commit()
     logger.info('[seed] Events done')
+
+    # ── Dating Profiles ───────────────────────────────────────────────────────
+    from backend.domains.profile.models import DatingProfile
+    dating_seeds = [
+        ('samuel-ocen',    'Sam', 'Engineer by day, football fan by weekend. Looking for someone to explore Kampala with.', 24, 34, 'serious', {'fitness': 'active', 'family': 'open'}),
+        ('aisha-nakayima', 'Aisha', 'Designer and problem solver. Love hiking, reading, and honest conversations.', 23, 33, 'serious', {'fitness': 'moderate', 'family': 'open'}),
+        ('henry-kiwanuka', 'Henry', 'Remote-first dev, loves quiet coffee spots and spontaneous road trips.', 25, 35, 'serious', {'fitness': 'moderate', 'family': 'wants_kids'}),
+        ('grace-atim',     'Grace', 'People person, HR specialist, and Sunday church-goer. Looking for depth over speed.', 24, 32, 'serious', {'family': 'wants_kids'}),
+        ('david-ochieng',  'David', 'Data nerd by week. Farmer at heart. Will cook you Ugandan dishes.', 23, 31, 'casual', {'fitness': 'active'}),
+        ('olivia-nansubuga','Olivia','Psychologist. Believes in healing, growth, and long walks.', 26, 36, 'serious', {'fitness': 'moderate', 'family': 'open'}),
+        ('irene-nalubega', 'Irene', 'Brand strategist. Vintage fashion lover. Will out-debate you on marketing.', 23, 32, 'casual', {}),
+        ('felix-mugisha',  'Felix', 'Telecoms engineer, MTN fan, and loud football commentator.', 25, 35, 'open', {'fitness': 'active'}),
+        ('kate-achieng',   'Kate', 'Lawyer and bookworm. Tea not coffee. Looking for substance.', 27, 37, 'serious', {'family': 'open'}),
+        ('noah-tumusiime', 'Noah', 'AgTech consultant. Always in the village. Loves the land.', 24, 34, 'open', {'fitness': 'active'}),
+    ]
+    for handle, dname, bio, age_min, age_max, intent, lifestyle in dating_seeds:
+        a_id = account_ids.get(handle)
+        if a_id and not DatingProfile.query.filter_by(account_id=a_id).first():
+            db.session.add(DatingProfile(
+                id=gen_id(), account_id=a_id, display_name=dname,
+                bio=bio, age_min=age_min, age_max=age_max,
+                intent=intent, lifestyle=lifestyle,
+                prompts=[{'question': 'My ideal weekend', 'answer': f'Something outdoors with good company — {dname} style.'}],
+            ))
+    db.session.commit()
+    logger.info(f'[seed] Dating profiles done ({len(dating_seeds)} profiles)')
+
+    # ── Spark actions for testing mutual match ─────────────────────────────────
+    from backend.domains.sparks.models import Spark, Match
+    from backend.domains.chat.models import Thread, ThreadParticipant
+    samuel_id = account_ids.get('samuel-ocen')
+    aisha_id  = account_ids.get('aisha-nakayima')
+    henry_id  = account_ids.get('henry-kiwanuka')
+    # samuel → aisha spark_up (and aisha → samuel reverse already seeded → match)
+    if samuel_id and aisha_id and not Spark.query.filter_by(actor_id=samuel_id, target_id=aisha_id).first():
+        db.session.add(Spark(id=gen_id(), actor_id=samuel_id, target_id=aisha_id, action='spark_up'))
+    # henry → samuel spark_up (so audit can spark henry → creates match)
+    if henry_id and samuel_id and not Spark.query.filter_by(actor_id=henry_id, target_id=samuel_id).first():
+        db.session.add(Spark(id=gen_id(), actor_id=henry_id, target_id=samuel_id, action='spark_up'))
+    db.session.commit()
+    # aisha → samuel spark_up → mutual match
+    if samuel_id and aisha_id and not Spark.query.filter_by(actor_id=aisha_id, target_id=samuel_id).first():
+        s = Spark(id=gen_id(), actor_id=aisha_id, target_id=samuel_id, action='spark_up')
+        db.session.add(s)
+        db.session.flush()
+        existing_match = Match.query.filter(
+            or_(
+                (Match.account_a_id == samuel_id) & (Match.account_b_id == aisha_id),
+                (Match.account_a_id == aisha_id)  & (Match.account_b_id == samuel_id),
+            )
+        ).first()
+        if not existing_match:
+            s_rev = Spark.query.filter_by(actor_id=samuel_id, target_id=aisha_id).first()
+            match = Match(id=gen_id(), account_a_id=samuel_id, account_b_id=aisha_id,
+                          spark_a_id=s_rev.id if s_rev else None, spark_b_id=s.id)
+            db.session.add(match)
+            db.session.flush()
+            # Auto-create sparks thread for the match
+            t = Thread(id=gen_id(), type='spark', mode='dating', created_by=samuel_id,
+                       last_message_at=now())
+            db.session.add(t); db.session.flush()
+            for pid in [samuel_id, aisha_id]:
+                db.session.add(ThreadParticipant(id=gen_id(), thread_id=t.id, account_id=pid))
+            match.thread_id = t.id
+    db.session.commit()
+    logger.info('[seed] Spark actions + match seed done')
 
     logger.info('[seed] ✓ Complete! Test with: +256700000001 / OTP: 123456')
 

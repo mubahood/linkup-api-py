@@ -268,6 +268,39 @@ def delete_account(account):
     return success_response('Account deleted.')
 
 
+# ─── Certifications ──────────────────────────────────────────
+
+@profile_bp.route('/me/certifications', methods=['POST'])
+@lu_jwt_required
+def add_certification(account):
+    data = request.get_json(silent=True) or {}
+    if not data.get('name'):
+        return error_response('Certification name is required.')
+    cert = Certification(
+        id=str(uuid.uuid4()),
+        account_id=account.id,
+        name=data['name'],
+        issuer=data.get('issuer'),
+        issued_at=data.get('issued_at'),
+        expires_at=data.get('expires_at'),
+        credential_url=data.get('credential_url'),
+    )
+    db.session.add(cert)
+    db.session.commit()
+    return success_response('Certification added.', cert.to_dict(), status_code=201)
+
+
+@profile_bp.route('/me/certifications/<cert_id>', methods=['DELETE'])
+@lu_jwt_required
+def delete_certification(account, cert_id):
+    cert = Certification.query.filter_by(id=cert_id, account_id=account.id).first()
+    if not cert:
+        return error_response('Certification not found.', status_code=404)
+    db.session.delete(cert)
+    db.session.commit()
+    return success_response('Certification removed.')
+
+
 # ─── Completion ──────────────────────────────────────────────
 
 @profile_bp.route('/completion', methods=['GET'])

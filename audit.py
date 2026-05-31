@@ -482,6 +482,321 @@ test("GET /v1/reference/orgs", "GET", "/v1/reference/orgs",
 test("GET /v1/reference/orgs?q=mtn", "GET", "/v1/reference/orgs?q=mtn",
      check=lambda d: f"orgs={len(d.get('data',[]) if isinstance(d,dict) else d)}")
 
+# ── Auth extras ────────────────────────────────────────────────────────────
+sec("AUTH EXTRAS")
+
+# Token refresh
+call("POST", "/v1/auth/otp/request", {"phone": "+256700000001", "purpose": "login"})
+d_rt, _ = call("POST", "/v1/auth/otp/verify",
+               {"phone": "+256700000001", "code": "123456", "purpose": "login"})
+REFRESH_TK = d_rt["data"]["refresh_token"] if d_rt else None
+if REFRESH_TK:
+    test("POST /v1/auth/refresh", "POST", "/v1/auth/refresh",
+         body={"refresh_token": REFRESH_TK},
+         check=lambda d: f"token={'yes' if d.get('access_token') else 'no'}")
+else:
+    print("  ⚠  Skipping refresh test — no refresh token available")
+
+# Device registration (push notifications)
+test("POST /v1/auth/device (register)", "POST", "/v1/auth/device",
+     body={"onesignal_player_id": "audit-test-player-001", "platform": "android"},
+     token=TK,
+     check=lambda d: f"platform={d.get('platform')} pid={d.get('onesignal_player_id','')[:20]}")
+
+# Error cases: register existing player_id again (should update, not fail)
+test("POST /v1/auth/device (update existing)", "POST", "/v1/auth/device",
+     body={"onesignal_player_id": "audit-test-player-001", "platform": "ios"},
+     token=TK,
+     check=lambda d: f"platform={d.get('platform')}")
+
+# Missing player_id
+d_bad, _ = call("POST", "/v1/auth/device", {"platform": "android"}, token=TK)
+if d_bad and d_bad.get("code") == 0:
+    print("  ✅ POST /v1/auth/device (missing player_id) → correctly rejected")
+    results["pass"].append("Device reg missing player_id rejected")
+else:
+    print("  ❌ POST /v1/auth/device (missing player_id) → should have failed")
+    results["fail"].append(("Device reg missing player_id rejected", "Expected code=0"))
+
+# ── Profile CRUD extras ────────────────────────────────────────────────────
+sec("PROFILE CRUD EXTRAS")
+
+# Get current profile for IDs
+d_prof_full = test("GET /v1/profile/me (full)", "GET", "/v1/profile/me", token=TK,
+     check=lambda d: f"edu={len(d.get('education',[]))} exp={len(d.get('experience',[]))}")
+
+# Education update
+if d_prof_full and d_prof_full.get('education'):
+    edu_id = d_prof_full['education'][0]['id']
+    test("PUT /v1/profile/me/education/:id", "PUT", f"/v1/profile/me/education/{edu_id}",
+         body={"degree": "BSc Computer Science (Hons)", "end_year": 2015},
+         token=TK,
+         check=lambda d: f"degree={d.get('degree','')[:30]}")
+
+# Add + delete education
+new_edu = test("POST /v1/profile/me/education (for delete)", "POST", "/v1/profile/me/education",
+     body={"institution_name": "Kyambogo University", "degree": "Diploma IT",
+           "field": "Information Technology", "start_year": 2018, "end_year": 2020},
+     token=TK,
+     check=lambda d: f"id={d.get('id','')[:8]}")
+if new_edu:
+    test("DELETE /v1/profile/me/education/:id", "DELETE", f"/v1/profile/me/education/{new_edu['id']}",
+         token=TK)
+
+# Experience update
+if d_prof_full and d_prof_full.get('experience'):
+    exp_id = d_prof_full['experience'][0]['id']
+    test("PUT /v1/profile/me/experience/:id", "PUT", f"/v1/profile/me/experience/{exp_id}",
+         body={"description": "Led backend API development across three products.",
+               "is_current": True},
+         token=TK,
+         check=lambda d: f"is_current={d.get('is_current')}")
+
+# Add + delete experience
+new_exp = test("POST /v1/profile/me/experience (for delete)", "POST", "/v1/profile/me/experience",
+     body={"title": "Freelance Consultant", "org_name": "Self", "start_date": "2023-01-01",
+           "is_current": False, "description": "Independent consulting work."},
+     token=TK,
+     check=lambda d: f"id={d.get('id','')[:8]}")
+if new_exp:
+    test("DELETE /v1/profile/me/experience/:id", "DELETE", f"/v1/profile/me/experience/{new_exp['id']}",
+         token=TK)
+
+# Certification add + delete
+new_cert = test("POST /v1/profile/me/certifications", "POST", "/v1/profile/me/certifications",
+     body={"name": "AWS Solutions Architect Associate",
+           "issuer": "Amazon Web Services",
+           "issued_at": "2025-03-01",
+           "credential_url": "https://www.credly.com/badges/test"},
+     token=TK,
+     check=lambda d: f"id={d.get('id','')[:8]} issuer={d.get('issuer','')[:20]}")
+if new_cert:
+    test("DELETE /v1/profile/me/certifications/:id", "DELETE",
+         f"/v1/profile/me/certifications/{new_cert['id']}",
+         token=TK)
+
+# Completion with missing_fields
+test("GET /v1/profile/completion (missing_fields)", "GET", "/v1/profile/completion", token=TK,
+     check=lambda d: f"score={d.get('score')}% missing={d.get('missing_fields',[])} label={d.get('label')}")
+
+# ── Sparks full flow ────────────────────────────────────────────────────────
+sec("SPARKS FULL FLOW")
+
+# Deck should have cards
+sparks_deck = test("GET /v1/sparks/deck", "GET", "/v1/sparks/deck", token=TK,
+     check=lambda d: f"cards={len(d) if isinstance(d, list) else d.get('total',0)}")
+
+# Get Henry's ID for mutual match test (Henry → Samuel already seeded)
+d_henry_prof, _ = call("GET", "/v1/profile/@henry-kiwanuka", token=TK)
+henry_spark_id = None
+if d_henry_prof and d_henry_prof.get("code") == 1:
+    henry_spark_id = d_henry_prof["data"]["account"]["id"]
+
+# Spark up on Henry — should produce a match (Henry already sparked Samuel in seed)
+if henry_spark_id:
+    # Cancel prior spark on Henry if test was run before
+    _prior_spark, _ = call("POST", "/v1/sparks/action",
+                            {"target_id": henry_spark_id, "action": "undo"}, token=TK)
+    d_spark = test("POST /v1/sparks/action (spark_up → match)", "POST", "/v1/sparks/action",
+         body={"target_id": henry_spark_id, "action": "spark_up"},
+         token=TK,
+         check=lambda d: f"is_match={d.get('is_match')} spark={d.get('spark',{}).get('action','?')}")
+    if d_spark and d_spark.get("is_match") and d_spark.get("match"):
+        match_id = d_spark["match"]["id"]
+        test("GET /v1/sparks/matches/:id (new match)", "GET", f"/v1/sparks/matches/{match_id}",
+             token=TK,
+             check=lambda d: f"thread={str(d.get('thread_id',''))[:8]} other={d.get('other_account',{}).get('display_name','?')[:20]}")
+    elif d_spark:
+        print("  ⚠  spark_up on Henry did not produce match — Henry may not have sparked back")
+
+# Pass on someone from deck
+if sparks_deck and isinstance(sparks_deck, list) and len(sparks_deck) > 0:
+    # Find someone not Henry
+    pass_target = next((c for c in sparks_deck if c['id'] != (henry_spark_id or '')), sparks_deck[0])
+    test("POST /v1/sparks/action (pass)", "POST", "/v1/sparks/action",
+         body={"target_id": pass_target["id"], "action": "pass"},
+         token=TK,
+         check=lambda d: f"is_match={d.get('is_match')}")
+
+# Match list (should now have at least the Aisha match from seed)
+matches_data = test("GET /v1/sparks/matches", "GET", "/v1/sparks/matches", token=TK,
+     check=lambda d: f"total={d.get('total',0)} matches={len(d.get('data',[]))}")
+
+# Match detail
+if matches_data and matches_data.get("data"):
+    mid = matches_data["data"][0]["id"]
+    test("GET /v1/sparks/matches/:id (detail)", "GET", f"/v1/sparks/matches/{mid}",
+         token=TK,
+         check=lambda d: f"other={d.get('other_account',{}).get('display_name','?')[:25]} thread={str(d.get('thread_id','none'))[:8]}")
+
+# Spark mode off guard — attempt as an account without sparks
+call("POST", "/v1/auth/otp/request", {"phone": "+256700000003", "purpose": "login"})
+d_nosparks, _ = call("POST", "/v1/auth/otp/verify",
+                     {"phone": "+256700000003", "code": "123456", "purpose": "login"})
+# Temporarily disable sparks for this check by using a phone that might not have it
+# (All seed accounts have sparks=True, so just check the response format)
+if d_nosparks and d_nosparks.get("code") == 1:
+    NS_TK = d_nosparks["data"]["access_token"]
+    # Sparks should work for all seed accounts (all have sparks=True)
+    d_ns_deck, _ = call("GET", "/v1/sparks/deck", token=NS_TK)
+    if d_ns_deck and d_ns_deck.get("code") == 1:
+        print(f"  ✅ GET /v1/sparks/deck (Brian) | cards={len(d_ns_deck['data']) if isinstance(d_ns_deck['data'], list) else '?'}")
+        results["pass"].append("Sparks deck for Brian")
+
+# ── Links CRUD extras ─────────────────────────────────────────────────────
+sec("LINKS CRUD EXTRAS")
+
+# Get someone to send/receive requests from
+d_oliver, _ = call("GET", "/v1/profile/@olivia-nansubuga", token=TK)
+d_robert, _ = call("GET", "/v1/profile/@robert-musinguzi", token=TK)
+
+# Accept an incoming request (first create one from another account)
+if d_robert and d_robert.get("code") == 1:
+    robert_id = d_robert["data"]["account"]["id"]
+    # Robert sends a link request to Samuel
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000019", "purpose": "login"})
+    d_rob_auth, _ = call("POST", "/v1/auth/otp/verify",
+                          {"phone": "+256700000019", "code": "123456", "purpose": "login"})
+    if d_rob_auth and d_rob_auth.get("code") == 1:
+        rob_tk = d_rob_auth["data"]["access_token"]
+        samuel_acct_id = ACCT["id"]
+        # Cancel existing link if any
+        _req_r, _ = call("GET", "/v1/links/requests", token=rob_tk)
+        if _req_r and _req_r.get("code") == 1:
+            for lnk in _req_r["data"].get("sent", []):
+                if lnk.get("addressee_id") == samuel_acct_id:
+                    call("DELETE", f"/v1/links/{lnk['id']}", token=rob_tk)
+        # Also clean up accepted link if any
+        _rob_links, _ = call("GET", "/v1/links", token=rob_tk)
+        if _rob_links and _rob_links.get("code") == 1:
+            for lnk in _rob_links["data"].get("data", []):
+                other_id = lnk.get("requester_id") if lnk.get("addressee_id") == robert_id else lnk.get("addressee_id")
+                if other_id == samuel_acct_id:
+                    call("DELETE", f"/v1/links/{lnk['id']}", token=rob_tk)
+
+        call("POST", "/v1/links/request", {"target_id": samuel_acct_id}, token=rob_tk)
+        # Samuel accepts
+        _reqs, _ = call("GET", "/v1/links/requests", token=TK)
+        if _reqs and _reqs.get("code") == 1:
+            for lnk in _reqs["data"].get("received", []):
+                if lnk.get("requester_id") == robert_id:
+                    test("POST /v1/links/:id/accept", "POST", f"/v1/links/{lnk['id']}/accept",
+                         token=TK,
+                         check=lambda d: f"status={d.get('status','?')}")
+                    break
+
+# Decline: James sends to Samuel, Samuel declines
+d_james, _ = call("GET", "/v1/profile/@james-oryem", token=TK)
+if d_james and d_james.get("code") == 1:
+    james_id = d_james["data"]["account"]["id"]
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000011", "purpose": "login"})
+    d_james_auth, _ = call("POST", "/v1/auth/otp/verify",
+                            {"phone": "+256700000011", "code": "123456", "purpose": "login"})
+    if d_james_auth and d_james_auth.get("code") == 1:
+        james_tk = d_james_auth["data"]["access_token"]
+        samuel_id2 = ACCT["id"]
+        # Clean up existing
+        _req_j, _ = call("GET", "/v1/links/requests", token=james_tk)
+        if _req_j and _req_j.get("code") == 1:
+            for lnk in _req_j["data"].get("sent", []):
+                if lnk.get("addressee_id") == samuel_id2:
+                    call("DELETE", f"/v1/links/{lnk['id']}", token=james_tk)
+        call("POST", "/v1/links/request", {"target_id": samuel_id2}, token=james_tk)
+        _reqs2, _ = call("GET", "/v1/links/requests", token=TK)
+        if _reqs2 and _reqs2.get("code") == 1:
+            for lnk in _reqs2["data"].get("received", []):
+                if lnk.get("requester_id") == james_id:
+                    test("POST /v1/links/:id/decline", "POST", f"/v1/links/{lnk['id']}/decline",
+                         token=TK,
+                         check=lambda d: f"status not returned on decline (expected empty)")
+                    break
+
+# Remove a link (add one temporarily)
+if d_oliver and d_oliver.get("code") == 1:
+    oliver_id = d_oliver["data"]["account"]["id"]
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000016", "purpose": "login"})
+    d_ol_auth, _ = call("POST", "/v1/auth/otp/verify",
+                         {"phone": "+256700000016", "code": "123456", "purpose": "login"})
+    if d_ol_auth and d_ol_auth.get("code") == 1:
+        ol_tk = d_ol_auth["data"]["access_token"]
+        samuel_id3 = ACCT["id"]
+        # Clean up existing
+        _req_ol, _ = call("GET", "/v1/links/requests", token=ol_tk)
+        if _req_ol and _req_ol.get("code") == 1:
+            for lnk in _req_ol["data"].get("sent", []):
+                if lnk.get("addressee_id") == samuel_id3:
+                    call("DELETE", f"/v1/links/{lnk['id']}", token=ol_tk)
+        lr = call("POST", "/v1/links/request", {"target_id": samuel_id3}, token=ol_tk)
+        _reqs3, _ = call("GET", "/v1/links/requests", token=TK)
+        if _reqs3 and _reqs3.get("code") == 1:
+            for lnk in _reqs3["data"].get("received", []):
+                if lnk.get("requester_id") == oliver_id:
+                    # Accept first, then remove
+                    call("POST", f"/v1/links/{lnk['id']}/accept", token=TK)
+                    test("DELETE /v1/links/:id (remove connection)", "DELETE", f"/v1/links/{lnk['id']}",
+                         token=TK)
+                    break
+
+# ── Hubs extras ────────────────────────────────────────────────────────────
+sec("HUBS EXTRAS")
+
+# Get a hub where Samuel is admin
+all_hubs = test("GET /v1/hubs (all)", "GET", "/v1/hubs", token=TK,
+     check=lambda d: f"total={d.get('total',0)}")
+admin_hub = None
+if all_hubs and all_hubs.get("data"):
+    for h_item in all_hubs["data"]:
+        if h_item.get("my_role") == "admin":
+            admin_hub = h_item
+            break
+
+if admin_hub:
+    test("PUT /v1/hubs/:id (update description)", "PUT", f"/v1/hubs/{admin_hub['id']}",
+         body={"description": "Updated description via audit test — community for tech builders across Uganda."},
+         token=TK,
+         check=lambda d: f"name={d.get('name','')[:30]} desc_len={len(d.get('description') or '')}")
+
+    # Delete a hub post
+    posts = test("GET /v1/hubs/:id/posts (pre-delete)", "GET", f"/v1/hubs/{admin_hub['id']}/posts", token=TK,
+         check=lambda d: f"count={len(d.get('data',[]))}")
+    if posts and posts.get("data"):
+        # Create one to delete
+        new_post = test("POST /v1/hubs/:id/posts (for delete)", "POST", f"/v1/hubs/{admin_hub['id']}/posts",
+             body={"content": "Temporary post for delete test — audit verification only."},
+             token=TK,
+             check=lambda d: f"id={d.get('id','')[:8]}")
+        if new_post:
+            test("DELETE /v1/hubs/:id/posts/:id", "DELETE",
+                 f"/v1/hubs/{admin_hub['id']}/posts/{new_post['id']}",
+                 token=TK)
+
+# Join a hub then leave it — use a different account to create the hub so Samuel starts as non-member
+call("POST", "/v1/auth/otp/request", {"phone": "+256700000003", "purpose": "login"})
+_d_br, _ = call("POST", "/v1/auth/otp/verify",
+                {"phone": "+256700000003", "code": "123456", "purpose": "login"})
+if _d_br and _d_br.get("code") == 1:
+    _br_tk = _d_br["data"]["access_token"]
+    _jl_hub, _ = call("POST", "/v1/hubs",
+                       {"name": "Join-Leave Test Hub", "type": "professional", "is_public": True},
+                       token=_br_tk)
+    if _jl_hub and _jl_hub.get("code") == 1:
+        _jl_id = _jl_hub["data"]["id"]
+        test("POST /v1/hubs/:id/join (Samuel joins)", "POST", f"/v1/hubs/{_jl_id}/join",
+             body={}, token=TK)
+        test("POST /v1/hubs/:id/leave (Samuel leaves)", "POST", f"/v1/hubs/{_jl_id}/leave",
+             body={}, token=TK)
+        # Try joining after leaving — should work again
+        test("POST /v1/hubs/:id/join (re-join after leave)", "POST", f"/v1/hubs/{_jl_id}/join",
+             body={}, token=TK)
+        # Try double-join — should fail gracefully
+        _d_dj, _ = call("POST", f"/v1/hubs/{_jl_id}/join", {}, token=TK)
+        if _d_dj and _d_dj.get("code") == 0:
+            print("  ✅ POST /v1/hubs/:id/join (double-join) → correctly rejected")
+            results["pass"].append("Hub double-join rejected")
+        else:
+            print("  ❌ Hub double-join should have been rejected")
+            results["fail"].append(("Hub double-join rejected", "Expected code=0"))
+
 # ── Legacy /api/ routes ────────────────────────────────────────────────────
 sec("LEGACY /api/ (backward compat)")
 

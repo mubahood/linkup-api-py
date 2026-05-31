@@ -70,8 +70,10 @@ def calculate_completion(account, prof_profile, edu_list, exp_list) -> dict:
     else:
         checks['experience'] = False
 
+    missing_fields = [k for k, v in checks.items() if not v]
     return {
         'score': min(score, 100),
         'checks': checks,
+        'missing_fields': missing_fields,
         'label': 'Expert' if score >= 80 else 'Intermediate' if score >= 50 else 'Beginner',
     }

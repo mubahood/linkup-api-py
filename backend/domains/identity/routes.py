@@ -175,6 +175,43 @@ def logout(account):
     return success_response('Logged out successfully.')
 
 
+@identity_bp.route('/device', methods=['POST'])
+@lu_jwt_required
+def register_device(account):
+    """Register or update a device token for push notifications."""
+    data = request.get_json(silent=True) or {}
+    player_id = (data.get('onesignal_player_id') or '').strip()
+    platform = data.get('platform', 'android')
+    device_token = data.get('device_token', '')
+
+    if not player_id:
+        return error_response('onesignal_player_id is required.')
+
+    from backend.domains.identity.models import AccountDevice
+    device = AccountDevice.query.filter_by(
+        account_id=account.id, onesignal_player_id=player_id
+    ).first()
+    if device:
+        device.platform = platform
+        if device_token:
+            device.device_token = device_token
+    else:
+        device = AccountDevice(
+            id=str(__import__('uuid').uuid4()),
+            account_id=account.id,
+            onesignal_player_id=player_id,
+            platform=platform,
+            device_token=device_token or None,
+        )
+        db.session.add(device)
+    db.session.commit()
+    return success_response('Device registered.', {
+        'id': device.id,
+        'platform': device.platform,
+        'onesignal_player_id': device.onesignal_player_id,
+    })
+
+
 @identity_bp.route('/refresh', methods=['POST'])
 def refresh():
     """Exchange refresh token for a new access token."""

@@ -1,6 +1,7 @@
 """
 Sparks service: deck generation, match creation.
 """
+import uuid
 from sqlalchemy import or_
 from backend.models import db
 from backend.domains.sparks.models import Spark, Match
@@ -10,13 +11,13 @@ from backend.domains.profile.models import DatingProfile
 
 def get_deck(account_id: str, limit: int = 20) -> list:
     """Generate a discovery deck of profiles to swipe on."""
-    # Exclude accounts already acted on
+    # Exclude accounts already acted on and blocked accounts
     acted_ids = {
         s.target_id for s in Spark.query.filter_by(actor_id=account_id).all()
     }
     acted_ids.add(account_id)
 
-    # Get accounts with dating profiles
+    # Get accounts with dating profiles who have sparks mode enabled
     query = db.session.query(Account).join(
         DatingProfile, DatingProfile.account_id == Account.id
     ).filter(
@@ -28,6 +29,16 @@ def get_deck(account_id: str, limit: int = 20) -> list:
     accounts = query.all()
     result = []
     for acc in accounts:
+        # Only include accounts with sparks mode enabled
+        modes = acc.modes_enabled or {}
+        if isinstance(modes, str):
+            import json
+            try:
+                modes = json.loads(modes)
+            except Exception:
+                modes = {}
+        if not modes.get('sparks', False):
+            continue
         dating = DatingProfile.query.filter_by(account_id=acc.id).first()
         card = acc.to_dict()
         card['dating_profile'] = dating.to_dict() if dating else None
@@ -37,7 +48,6 @@ def get_deck(account_id: str, limit: int = 20) -> list:
 
 def record_action(actor_id: str, target_id: str, action: str) -> tuple[Spark, Match | None]:
     """Record a spark action and check for a mutual match."""
-    import uuid
     # Upsert the spark (on duplicate, update action)
     existing = Spark.query.filter_by(actor_id=actor_id, target_id=target_id).first()
     if existing:
@@ -78,6 +88,31 @@ def record_action(actor_id: str, target_id: str, action: str) -> tuple[Spark, Ma
                     spark_b_id=reverse.id,
                 )
                 db.session.add(match)
+                db.session.flush()
+                # Auto-create a Sparks direct thread for the match
+                _create_match_thread(match, actor_id, target_id)
 
     db.session.commit()
     return spark, match
+
+
+def _create_match_thread(match: Match, account_a: str, account_b: str):
+    """Create a Sparks-mode direct thread for a new match."""
+    from datetime import datetime
+    from backend.domains.chat.models import Thread, ThreadParticipant
+    thread = Thread(
+        id=str(uuid.uuid4()),
+        type='spark',
+        mode='dating',
+        created_by=account_a,
+        last_message_at=datetime.utcnow(),
+    )
+    db.session.add(thread)
+    db.session.flush()
+    for pid in [account_a, account_b]:
+        db.session.add(ThreadParticipant(
+            id=str(uuid.uuid4()),
+            thread_id=thread.id,
+            account_id=pid,
+        ))
+    match.thread_id = thread.id

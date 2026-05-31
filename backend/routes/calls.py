@@ -57,8 +57,8 @@ def get_ice_config(user):
         or local_ip
     )
     turn_port = int(os.environ.get('TURN_PORT', '3478'))
-    turn_user = os.environ.get('TURN_USER', 'negoride')
-    turn_pass = os.environ.get('TURN_PASSWORD', 'negoride2026')
+    turn_user = os.environ.get('TURN_USER, 'linkup')
+    turn_pass = os.environ.get('TURN_PASSWORD, 'linkup2026')
 
     ice_servers = [
         {

@@ -6,8 +6,8 @@ load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'negoride-default-secret-key-2026')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'negoride-default-jwt-key-2026')
+    SECRET_KEY = os.getenv('SECRET_KEY', 'linkup-default-secret-key-2026')
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'linkup-default-jwt-key-2026')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 315360000)))
 
     # MySQL via MAMP socket (Unix) or TCP/IP (Windows/TCP)
@@ -15,7 +15,7 @@ class Config:
     DB_PASS = os.getenv('DB_PASSWORD', 'root')
     DB_HOST = os.getenv('DB_HOST', '127.0.0.1')
     DB_PORT = os.getenv('DB_PORT', '3306')
-    DB_NAME = os.getenv('DB_DATABASE', 'negoride')
+    DB_NAME = os.getenv('DB_DATABASE', 'linkup')
     DB_SOCKET = os.getenv('DB_SOCKET', '/Applications/MAMP/tmp/mysql/mysql.sock')
 
     # Build SQLAlchemy connection string
@@ -56,8 +56,8 @@ class Config:
     ONESIGNAL_REST_API_KEY = os.getenv('ONESIGNAL_REST_API_KEY', '')
 
     # App URL
-    APP_URL = os.getenv('APP_URL', 'https://negoride.ugnews24.info')
-    APP_NAME = os.getenv('APP_NAME', 'Truckeroo Nigeria')
+    APP_URL = os.getenv('APP_URL', 'https://api.linkup.app')
+    APP_NAME = os.getenv('APP_NAME', 'LinkUp')
 
     # SMTP / Email
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
@@ -66,5 +66,5 @@ class Config:
     MAIL_USE_SSL = os.getenv('MAIL_USE_SSL', 'false').lower() == 'true'
     MAIL_USERNAME = os.getenv('MAIL_USERNAME', '')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '')
-    MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'Truckeroo Nigeria')
+    MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'LinkUp')
     MAIL_FROM_ADDRESS = os.getenv('MAIL_FROM_ADDRESS', os.getenv('MAIL_USERNAME', ''))

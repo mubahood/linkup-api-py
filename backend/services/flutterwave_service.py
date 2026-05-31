@@ -1,5 +1,5 @@
 """
-Flutterwave Payment Service — Truckeroo Nigeria
+Flutterwave Payment Service — LinkUp Uganda
 
 Replaces Stripe. Handles:
   • Hosted payment page initiation (standard checkout)
@@ -29,7 +29,7 @@ class FlutterwaveError(Exception):
 
 
 class FlutterwaveService:
-    """Core Flutterwave integration for Truckeroo Nigeria."""
+    """Core Flutterwave integration for LinkUp Uganda."""
 
     BASE_URL = "https://api.flutterwave.com/v3"
 
@@ -40,7 +40,7 @@ class FlutterwaveService:
         self._currency = os.getenv('FLW_CURRENCY', 'NGN')
         self._payment_options = os.getenv('FLW_PAYMENT_OPTIONS', 'card,banktransfer,ussd')
         self._timeout = int(os.getenv('FLW_TIMEOUT', 30))
-        self._app_url = os.getenv('APP_URL', 'https://truckeroo.mruodel.com')
+        self._app_url = os.getenv('APP_URL', 'https://api.linkup.app')
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ class FlutterwaveService:
         customer_email: str,
         customer_phone: str,
         redirect_url: str = None,
-        description: str = 'Truckeroo Payment',
+        description: str = 'LinkUp Payment',
         currency: str = None,
         payment_options: str = None,
         meta: dict = None,
@@ -129,12 +129,12 @@ class FlutterwaveService:
             'redirect_url': redirect_url or f"{self._app_url}/api/flutterwave/callback",
             'payment_options': payment_options or self._payment_options,
             'customer': {
-                'email': customer_email or f"customer_{tx_ref}@truckeroo.com",
+                'email': customer_email or f"customer_{tx_ref}@linkup.app",
                 'phonenumber': self._normalize_phone(customer_phone),
-                'name': customer_name or 'Truckeroo Customer',
+                'name': customer_name or 'LinkUp Member',
             },
             'customizations': {
-                'title': 'Truckeroo Nigeria',
+                'title': 'LinkUp Uganda',
                 'description': description,
                 'logo': f"{self._app_url}/uploads/images/truckero.png",
             },
@@ -267,7 +267,7 @@ class FlutterwaveService:
         Returns dict with transfer id, reference, status.
         """
         if not reference:
-            reference = f"truckeroo-payout-{uuid.uuid4().hex[:16]}"
+            reference = f"linkup-payout-{uuid.uuid4().hex[:16]}"
 
         payload = {
             'account_bank': account_bank,

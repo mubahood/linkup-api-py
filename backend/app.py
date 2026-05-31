@@ -109,7 +109,7 @@ def create_app():
     def serve_admin():
         if os.path.isfile(os.path.join(admin_build, 'index.html')):
             return send_from_directory(admin_build, 'index.html')
-        return {'status': 'ok', 'service': 'Truckeroo Nigeria API', 'version': '1.0',
+        return {'status': 'ok', 'service': 'LinkUp API', 'version': '1.0',
                 'note': 'Admin frontend not built yet. Run: cd frontend && npm run build'}
 
     @app.route('/assets/<path:filename>')
@@ -127,7 +127,7 @@ def create_app():
             return send_from_directory(admin_build, path)
         if os.path.isfile(os.path.join(admin_build, 'index.html')):
             return send_from_directory(admin_build, 'index.html')
-        return {'status': 'ok', 'service': 'Truckeroo Nigeria API', 'version': '1.0'}
+        return {'status': 'ok', 'service': 'LinkUp API', 'version': '1.0'}
 
     return app
 
@@ -149,11 +149,11 @@ if __name__ == '__main__':
     port = Config.SERVER_PORT
 
     print('=' * 70)
-    print('[*] Truckeroo Nigeria API Starting...')
+    print('[*] LinkUp API Starting...')
     print(f'   Backend API:     http://127.0.0.1:{port}/api')
     print(f'   Network access:  http://{local_ip}:{port}/api')
     print(f'   Socket.IO:       ws://{local_ip}:{port}/socket.io')
-    print(f'   Database:        MySQL (negoride)')
+    print(f'   Database:        MySQL (linkup)')
     print('=' * 70)
 
     socketio.run(

@@ -1,5 +1,5 @@
 """
-Flutterwave Payment Routes — Truckeroo Nigeria
+Flutterwave Payment Routes — LinkUp Uganda
 
 Endpoints:
   POST /api/flutterwave/pay               — initialize payment for a booking
@@ -82,8 +82,8 @@ def initialize_payment(user):
 
     # Customer info
     customer = booking.customer
-    customer_email = customer.email if customer else f"user{booking.customer_id}@truckeroo.com"
-    customer_name = customer.name if customer else "Truckeroo Customer"
+    customer_email = customer.email if customer else f"user{booking.customer_id}@linkup.app"
+    customer_name = customer.name if customer else "LinkUp Member"
     customer_phone = customer.phone_number if customer else ""
 
     flw = get_flutterwave()
@@ -94,7 +94,7 @@ def initialize_payment(user):
             customer_name=customer_name,
             customer_email=customer_email,
             customer_phone=customer_phone,
-            description=f"Truckeroo booking #{booking.id} — {booking.service_type}",
+            description=f"LinkUp booking #{booking.id} — {booking.service_type}",
             meta={
                 'booking_id': booking.id,
                 'customer_id': booking.customer_id,
@@ -431,7 +431,7 @@ def initiate_payout(user):
             account_number=payout_account.flw_account_number,
             amount=float(payout.amount),
             beneficiary_name=payout_account.flw_account_name or driver_name,
-            narration=f"Truckeroo earnings payout for {driver_name}",
+            narration=f"LinkUp earnings payout for {driver_name}",
             reference=reference,
         )
     except FlutterwaveError as e:

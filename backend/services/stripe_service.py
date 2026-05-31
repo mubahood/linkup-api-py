@@ -28,7 +28,7 @@ def create_checkout_session(
     Returns:
         dict with session.id and session.url
     """
-    base_url = os.environ.get('APP_URL', 'https://negoride.ugnews24.info')
+    base_url = os.environ.get('APP_URL', 'https://api.linkup.app')
 
     params = {
         'mode': 'payment',
@@ -38,7 +38,7 @@ def create_checkout_session(
                 'currency': currency,
                 'unit_amount': amount_cents,
                 'product_data': {
-                    'name': 'NegoRide Canada - Ride Payment',
+                    'name': 'LinkUp - Ride Payment',
                 },
             },
             'quantity': 1,

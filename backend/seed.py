@@ -344,15 +344,15 @@ def _run_seed():
     # ── Events ────────────────────────────────────────────────────────────
     creator_id = account_ids['samuel-ocen']
     for title, desc, etype, days_offset, is_online in [
-        ('Uganda Tech Summit 2026','The flagship annual gathering of the Uganda tech ecosystem.','conference',14,False),
-        ('Kampala Startup Weekend','Build a startup in 54 hours — pitch, build, network.','hackathon',30,False),
+        ('Uganda Tech Summit 2026','The flagship annual gathering of the Uganda tech ecosystem.','other',14,False),
+        ('Kampala Startup Weekend','Build a startup in 54 hours — pitch, build, network.','workshop',30,False),
         ('LinkUp Networking Mixer','Monthly LinkUp member mixer in Kampala.','networking',7,True),
     ]:
         if not Event.query.filter_by(title=title).first():
             start = now()+timedelta(days=days_offset)
             db.session.add(Event(id=gen_id(), created_by=creator_id, title=title,
                                  description=desc, event_type=etype, start_at=start,
-                                 end_at=start+timedelta(hours=4), location_id=kampala_id,
+                                 end_at=start+timedelta(hours=4), location_text="Kampala, Uganda",
                                  is_online=is_online, max_attendees=200, created_at=days_ago(5)))
     db.session.commit()
     logger.info('[seed] Events done')

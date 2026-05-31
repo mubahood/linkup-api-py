@@ -83,7 +83,6 @@ class AdminUser(db.Model):
 
     # Relationships
     wallet = db.relationship('UserWallet', backref='user', uselist=False, lazy=True)
-    payout_account = db.relationship('PayoutAccount', backref='user', uselist=False, lazy=True)
 
     @property
     def is_driver(self):

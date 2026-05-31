@@ -31,7 +31,6 @@ from flask_socketio import emit
 
 from backend.models import db
 from backend.models.call_log import CallLog
-from backend.models.negotiation import Negotiation
 from backend.models.user import AdminUser
 
 

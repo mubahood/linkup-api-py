@@ -3,8 +3,6 @@ import os
 import uuid
 from flask import Blueprint, request
 from backend.models import db
-from backend.models.negotiation import Negotiation
-from backend.models.trip_booking import TripBooking
 from backend.models.payment import Payment
 from backend.models.transaction import Transaction
 from backend.models.user_wallet import UserWallet

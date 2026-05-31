@@ -9,7 +9,6 @@ from flask_socketio import SocketIO
 from backend.config import Config
 from backend.models import db
 
-# Initialize extensions
 jwt = JWTManager()
 socketio = SocketIO()
 
@@ -18,12 +17,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
 
-    # Initialize Socket.IO for real-time call signaling
     socketio.init_app(
         app,
         cors_allowed_origins="*",
@@ -34,42 +31,25 @@ def create_app():
         engineio_logger=False,
     )
 
-    # Ensure upload directory exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
 
-    # Register blueprints
+    # --- Retained blueprints (salvaged infrastructure) ---
     from backend.routes.auth import auth_bp
     from backend.routes.profile import profile_bp
-    from backend.routes.trips import trips_bp
-    from backend.routes.negotiations import negotiations_bp
-    from backend.routes.bookings import bookings_bp
     from backend.routes.wallet import wallet_bp
-    from backend.routes.payout_account import payout_account_bp
-    from backend.routes.payout_requests import payout_requests_bp
     from backend.routes.chat import chat_bp
-    from backend.routes.location import location_bp
-    from backend.routes.resources import resources_bp
     from backend.routes.webhooks import webhooks_bp
     from backend.routes.admin import admin_bp
-    from backend.routes.stream import stream_bp
     from backend.routes.calls import calls_bp
     from backend.routes.ratings import ratings_bp
     from backend.routes.flutterwave import flutterwave_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
-    app.register_blueprint(trips_bp)
-    app.register_blueprint(negotiations_bp)
-    app.register_blueprint(bookings_bp)
     app.register_blueprint(wallet_bp)
-    app.register_blueprint(payout_account_bp)
-    app.register_blueprint(payout_requests_bp)
     app.register_blueprint(chat_bp)
-    app.register_blueprint(location_bp)
-    app.register_blueprint(resources_bp)
     app.register_blueprint(webhooks_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(stream_bp)
     app.register_blueprint(calls_bp)
     app.register_blueprint(ratings_bp)
     app.register_blueprint(flutterwave_bp)
@@ -92,17 +72,15 @@ def create_app():
             return error_response("Method not allowed for this endpoint.", status_code=405)
         return _error
 
-    # Serve uploaded files
+    # Serve uploaded files (legacy — will be replaced by R2 in T-API-012)
     @app.route('/uploads/<path:filename>')
     def serve_upload(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
     @app.route('/storage/<path:filename>')
     def serve_storage(filename):
-        """Compatibility with Laravel's storage path"""
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-    # ── Serve React Admin Frontend ──
     admin_build = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'build')
 
     @app.route('/')
@@ -118,7 +96,6 @@ def create_app():
 
     @app.route('/<path:path>')
     def serve_admin_spa(path):
-        """SPA fallback — serve index.html for any non-API route"""
         if path.startswith('api/'):
             from flask import abort
             abort(404)
@@ -136,7 +113,6 @@ app = create_app()
 
 
 if __name__ == '__main__':
-    # Get local IP address
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(('8.8.8.8', 80))
@@ -153,7 +129,7 @@ if __name__ == '__main__':
     print(f'   Backend API:     http://127.0.0.1:{port}/api')
     print(f'   Network access:  http://{local_ip}:{port}/api')
     print(f'   Socket.IO:       ws://{local_ip}:{port}/socket.io')
-    print(f'   Database:        MySQL (linkup)')
+    print(f'   Database:        MySQL (linkup) — migrating to Postgres in Phase 1')
     print('=' * 70)
 
     socketio.run(

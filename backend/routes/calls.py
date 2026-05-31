@@ -16,7 +16,6 @@ from datetime import datetime
 from flask import Blueprint, request
 from backend.models import db
 from backend.models.call_log import CallLog
-from backend.models.negotiation import Negotiation
 from backend.models.user import AdminUser
 from backend.utils.auth import jwt_required_with_user
 from backend.utils.response import success_response, error_response
@@ -57,8 +56,8 @@ def get_ice_config(user):
         or local_ip
     )
     turn_port = int(os.environ.get('TURN_PORT', '3478'))
-    turn_user = os.environ.get('TURN_USER, 'linkup')
-    turn_pass = os.environ.get('TURN_PASSWORD, 'linkup2026')
+    turn_user = os.environ.get('TURN_USER', 'linkup')
+    turn_pass = os.environ.get('TURN_PASSWORD', 'linkup2026')
 
     ice_servers = [
         {

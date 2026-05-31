@@ -26,6 +26,7 @@ class Account(db.Model):
     avatar = db.Column(db.String(500), nullable=True)
     cover_photo = db.Column(db.String(500), nullable=True)
     location_id = db.Column(db.String(36), db.ForeignKey('lu_locations.id', ondelete='SET NULL'), nullable=True)
+    is_admin = db.Column(db.SmallInteger, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at = db.Column(db.DateTime, nullable=True)

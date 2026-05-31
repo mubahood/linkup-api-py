@@ -14,8 +14,9 @@ from backend.shared.storage.local import save_upload
 profile_bp = Blueprint('v1_profile', __name__, url_prefix='/v1/profile')
 
 
-def _get_full_profile(account_id: str) -> dict:
-    """Build a full professional profile payload."""
+def _get_full_profile(account_id: str, viewer_id: str = None) -> dict:
+    """Build a full professional profile payload with completion score."""
+    from backend.domains.interest.models import InterestProfile, InterestTag
     account = db.session.get(Account, account_id)
     if not account:
         return None
@@ -24,19 +25,41 @@ def _get_full_profile(account_id: str) -> dict:
     exp = Experience.query.filter_by(account_id=account_id).order_by(Experience.start_date.desc()).all()
     certs = Certification.query.filter_by(account_id=account_id).all()
 
+    # Interests (professional mode only for public view)
+    interests_q = InterestProfile.query.filter_by(account_id=account_id)
+    if viewer_id != account_id:
+        interests_q = interests_q.filter(InterestProfile.mode.in_(['professional', 'both']))
+    interest_profiles = interests_q.all()
+    interests = []
+    for ip in interest_profiles:
+        tag = db.session.get(InterestTag, ip.tag_id)
+        if tag:
+            interests.append({**tag.to_dict(), 'weight': float(ip.weight or 0), 'pinned': bool(ip.pinned)})
+
+    # Completion score
+    completion = calculate_completion(account, prof, edu, exp)
+
+    # Build profile dict with completion embedded
+    prof_dict = prof.to_dict() if prof else {}
+    if prof_dict:
+        prof_dict['completion_score'] = completion['score']
+
     return {
         'account': account.to_dict(),
-        'professional_profile': prof.to_dict() if prof else None,
+        'profile': prof_dict,                          # alias for front-end convenience
+        'professional_profile': prof_dict,             # keep for backward compat
         'education': [e.to_dict() for e in edu],
         'experience': [e.to_dict() for e in exp],
         'certifications': [c.to_dict() for c in certs],
+        'interests': interests,
+        'completion': completion,
     }
 
 
 @profile_bp.route('/me', methods=['GET'])
 @lu_jwt_required
 def get_my_profile(account):
-    payload = _get_full_profile(account.id)
+    payload = _get_full_profile(account.id, viewer_id=account.id)
     return success_response('Profile loaded.', payload)
 
 
@@ -82,13 +105,18 @@ def upload_photo(account):
 @profile_bp.route('/@<handle>', methods=['GET'])
 @lu_jwt_required
 def get_profile_by_handle(account, handle):
-    target = Account.query.filter_by(handle=handle).filter(Account.deleted_at.is_(None)).first()
+    # Normalize: hyphens → underscores, lowercase (for URL-friendly aliases)
+    normalized = handle.lower().replace('-', '_')
+    target = Account.query.filter(
+        Account.handle.ilike(normalized),
+        Account.deleted_at.is_(None)
+    ).first()
     if not target:
         return error_response('Profile not found.', status_code=404)
     prof = ProfessionalProfile.query.filter_by(account_id=target.id).first()
     if prof and prof.visibility_mode == 'self_only' and target.id != account.id:
         return error_response('This profile is private.', status_code=403)
-    payload = _get_full_profile(target.id)
+    payload = _get_full_profile(target.id, viewer_id=account.id)
     return success_response('Profile loaded.', payload)
 
 
@@ -107,10 +135,29 @@ def update_dating_profile(account):
     if not prof:
         prof = DatingProfile(id=str(uuid.uuid4()), account_id=account.id)
         db.session.add(prof)
+
+    # Intent enum normalization: map long-form values to DB enum values
+    intent_map = {
+        'serious_relationship': 'serious', 'serious relationship': 'serious',
+        'casual_dating': 'casual', 'casual dating': 'casual',
+        'friendship_first': 'friendship', 'friendship': 'friendship',
+        'marriage_minded': 'serious',
+        'open': 'open',
+    }
+
     for field in ['display_name', 'bio', 'age_min', 'age_max', 'intent', 'lifestyle', 'prompts']:
         if field in data:
-            setattr(prof, field, data[field])
-    db.session.commit()
+            val = data[field]
+            if field == 'intent' and isinstance(val, str):
+                val = intent_map.get(val.lower(), val)
+            setattr(prof, field, val)
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return error_response(f'Could not update dating profile: {str(e)}', status_code=422)
+
     return success_response('Dating profile updated.', prof.to_dict())
 
 

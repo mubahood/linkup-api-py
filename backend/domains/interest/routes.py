@@ -54,6 +54,11 @@ def set_interests(account):
     results = []
     for item in interests:
         tag_id = item.get('tag_id')
+        slug = item.get('slug')
+        # Support slug-based lookup if tag_id not provided
+        if not tag_id and slug:
+            tag = InterestTag.query.filter_by(slug=slug).first()
+            tag_id = tag.id if tag else None
         if not tag_id:
             continue
         tag = db.session.get(InterestTag, tag_id)
@@ -73,7 +78,7 @@ def set_interests(account):
                 account_id=account.id,
                 tag_id=tag_id,
                 weight=item.get('weight', 0.5),
-                mode=item.get('mode', 'both'),
+                mode=item.get('mode', 'professional'),
                 pinned=int(item.get('pinned', 0)),
                 source='explicit',
             )
@@ -81,7 +86,10 @@ def set_interests(account):
             results.append(ip.to_dict())
 
     db.session.commit()
-    return success_response('Interests updated.', results)
+    return success_response('Interests updated.', {
+        'updated': len(results),
+        'interests': results,
+    })
 
 
 @interest_bp.route('/me/<tag_id>', methods=['DELETE'])

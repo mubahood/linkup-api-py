@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from flask import Blueprint, request
 from backend.models import db
-from backend.domains.chat.models import Thread, ThreadParticipant, Message
+from backend.domains.chat.models import Thread, ThreadParticipant, Message, MessageReaction
 from backend.domains.chat.service import get_or_create_direct_thread, send_message, get_unread_count
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.utils.response import success_response, error_response, paginated_response
@@ -125,6 +125,80 @@ def post_message(account, thread_id):
         pass
 
     return success_response('Message sent.', msg.to_dict(), status_code=201)
+
+
+@chat_v1_bp.route('/<thread_id>/messages/<message_id>/react', methods=['POST'])
+@lu_jwt_required
+def react_message(account, thread_id, message_id):
+    """Toggle an emoji reaction on a message."""
+    participant = ThreadParticipant.query.filter_by(thread_id=thread_id, account_id=account.id).first()
+    if not participant:
+        return error_response('Thread not found.', status_code=404)
+
+    msg = Message.query.filter_by(id=message_id, thread_id=thread_id).filter(
+        Message.deleted_at.is_(None)
+    ).first()
+    if not msg:
+        return error_response('Message not found.', status_code=404)
+
+    data = request.get_json(silent=True) or {}
+    emoji = (data.get('emoji') or '👍').strip()
+    if len(emoji) > 10:
+        return error_response('Emoji must be a single emoji character.')
+
+    existing = MessageReaction.query.filter_by(
+        message_id=message_id, account_id=account.id, emoji=emoji
+    ).first()
+
+    if existing:
+        # Remove (toggle off)
+        db.session.delete(existing)
+        db.session.commit()
+        return success_response('Reaction removed.', {'reacted': False, 'emoji': emoji})
+
+    reaction = MessageReaction(
+        id=str(uuid.uuid4()),
+        message_id=message_id,
+        account_id=account.id,
+        emoji=emoji,
+    )
+    db.session.add(reaction)
+    db.session.commit()
+    return success_response('Reaction added.', reaction.to_dict(), status_code=201)
+
+
+@chat_v1_bp.route('/<thread_id>/messages/<message_id>/reactions', methods=['GET'])
+@lu_jwt_required
+def message_reactions(account, thread_id, message_id):
+    """List all reactions on a message, grouped by emoji."""
+    participant = ThreadParticipant.query.filter_by(thread_id=thread_id, account_id=account.id).first()
+    if not participant:
+        return error_response('Thread not found.', status_code=404)
+
+    msg = Message.query.filter_by(id=message_id, thread_id=thread_id).filter(
+        Message.deleted_at.is_(None)
+    ).first()
+    if not msg:
+        return error_response('Message not found.', status_code=404)
+
+    reactions = MessageReaction.query.filter_by(message_id=message_id).all()
+
+    # Group by emoji for a summary count
+    grouped: dict = {}
+    for r in reactions:
+        if r.emoji not in grouped:
+            grouped[r.emoji] = {'emoji': r.emoji, 'count': 0, 'reacted_by_me': False, 'accounts': []}
+        grouped[r.emoji]['count'] += 1
+        if r.account_id == account.id:
+            grouped[r.emoji]['reacted_by_me'] = True
+        if grouped[r.emoji]['count'] <= 5 and r.account:
+            grouped[r.emoji]['accounts'].append(r.account.to_dict())
+
+    return success_response('Reactions loaded.', {
+        'message_id': message_id,
+        'total': len(reactions),
+        'summary': list(grouped.values()),
+    })
 
 
 @chat_v1_bp.route('/<thread_id>/read', methods=['POST'])

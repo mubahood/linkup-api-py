@@ -1046,6 +1046,260 @@ OLD_TK = d_old["data"]["access_token"] if d_old else TK
 test("GET /api/admin/system/health", "GET", "/api/admin/system/health", token=OLD_TK)
 test("GET /api/admin/dashboard", "GET", "/api/admin/dashboard", token=OLD_TK)
 
+# ── Jobs list endpoints ────────────────────────────────────────────────────
+sec("JOBS LIST ENDPOINTS")
+
+# Save a job first (toggle to ensure saved)
+_jobs_feed, _ = call("GET", "/v1/jobs", token=TK)
+_feed_job = None
+if _jobs_feed and _jobs_feed.get("code") == 1:
+    for j in _jobs_feed["data"].get("data", []):
+        if not j.get("is_saved"):
+            call("POST", f"/v1/jobs/{j['id']}/save", token=TK)
+            _feed_job = j
+            break
+
+test("GET /v1/jobs/saved", "GET", "/v1/jobs/saved", token=TK,
+     check=lambda d: f"saved={d.get('total',0)} has_job={'title' in (d.get('data',[{}])[0] if isinstance(d,dict) and d.get('data') else {})}")
+
+test("GET /v1/jobs/applications", "GET", "/v1/jobs/applications", token=TK,
+     check=lambda d: f"applications={d.get('total',0)}")
+
+# Pagination filter: only applied jobs
+test("GET /v1/jobs/applications?status=applied", "GET", "/v1/jobs/applications?status=applied", token=TK,
+     check=lambda d: f"applied={d.get('total',0)}")
+
+# ── Events list endpoints ──────────────────────────────────────────────────
+sec("EVENTS LIST ENDPOINTS")
+
+# RSVP to an upcoming event first (to populate /going)
+_ev_list, _ = call("GET", "/v1/events", token=TK)
+_going_ev = None
+if _ev_list and _ev_list.get("code") == 1 and _ev_list["data"].get("data"):
+    _going_ev = _ev_list["data"]["data"][0]
+    call("POST", f"/v1/events/{_going_ev['id']}/rsvp", {"status": "going"}, token=TK)
+
+test("GET /v1/events/mine", "GET", "/v1/events/mine", token=TK,
+     check=lambda d: f"mine={d.get('total',0)}")
+
+test("GET /v1/events/going", "GET", "/v1/events/going", token=TK,
+     check=lambda d: f"going={d.get('total',0)}")
+
+# ── Notification extras ────────────────────────────────────────────────────
+sec("NOTIFICATION EXTRAS")
+
+test("GET /v1/notifications/unread-count", "GET", "/v1/notifications/unread-count", token=TK,
+     check=lambda d: f"unread={d.get('unread_count',0)}")
+
+# Mark one notification read (create a notification by sending a link request)
+_all_notifs, _ = call("GET", "/v1/notifications", token=TK)
+if _all_notifs and _all_notifs.get("code") == 1 and _all_notifs["data"].get("data"):
+    _nid = _all_notifs["data"]["data"][0]["id"]
+    test(f"POST /v1/notifications/:id/read", "POST", f"/v1/notifications/{_nid}/read",
+         token=TK,
+         check=lambda d: f"is_read={d.get('is_read')}")
+    # 404 for unknown notification
+    _bad_notif, _ = call("POST", "/v1/notifications/nonexistent-id/read", token=TK)
+    if _bad_notif and _bad_notif.get("code") == 0:
+        print("  ✅ POST /v1/notifications/:bad/read → correct 404")
+        results["pass"].append("Notification single-read 404")
+    else:
+        print("  ❌ Notification single-read should 404 for unknown id")
+        results["fail"].append(("Notification single-read 404", "Expected code=0"))
+
+# ── Hub post likes ─────────────────────────────────────────────────────────
+sec("HUB POST LIKES")
+
+_hub_list, _ = call("GET", "/v1/hubs", token=TK)
+_like_hub = None
+_like_post = None
+if _hub_list and _hub_list.get("code") == 1 and _hub_list["data"].get("data"):
+    _like_hub = _hub_list["data"]["data"][0]
+    _hub_posts, _ = call("GET", f"/v1/hubs/{_like_hub['id']}/posts", token=TK)
+    if _hub_posts and _hub_posts.get("code") == 1 and _hub_posts["data"].get("data"):
+        _like_post = _hub_posts["data"]["data"][0]
+
+if _like_hub and _like_post:
+    hid = _like_hub["id"]
+    pid = _like_post["id"]
+
+    # Like the post
+    test("POST /v1/hubs/:id/posts/:id/like (like)", "POST", f"/v1/hubs/{hid}/posts/{pid}/like",
+         token=TK,
+         check=lambda d: f"liked={d.get('liked')} count={d.get('like_count',0)}")
+
+    # Like again → unlike (toggle)
+    test("POST /v1/hubs/:id/posts/:id/like (unlike toggle)", "POST", f"/v1/hubs/{hid}/posts/{pid}/like",
+         token=TK,
+         check=lambda d: f"liked={d.get('liked')} count={d.get('like_count',0)}")
+
+    # Like again to leave it liked
+    test("POST /v1/hubs/:id/posts/:id/like (re-like)", "POST", f"/v1/hubs/{hid}/posts/{pid}/like",
+         token=TK,
+         check=lambda d: f"liked={d.get('liked')}")
+
+    # List likes
+    test("GET /v1/hubs/:id/posts/:id/likes", "GET", f"/v1/hubs/{hid}/posts/{pid}/likes",
+         token=TK,
+         check=lambda d: f"total={d.get('total',0)} has_account={'account' in (d.get('data',[{}])[0] if d.get('data') else {})}")
+
+    # Like from another account (David)
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000005", "purpose": "login"})
+    _d_dav, _ = call("POST", "/v1/auth/otp/verify", {"phone": "+256700000005", "code": "123456", "purpose": "login"})
+    if _d_dav and _d_dav.get("code") == 1:
+        dav_tk = _d_dav["data"]["access_token"]
+        call("POST", f"/v1/hubs/{hid}/posts/{pid}/like", token=dav_tk)
+        d_likes2 = test("GET /v1/hubs/:id/posts/:id/likes (after 2nd like)", "GET",
+                        f"/v1/hubs/{hid}/posts/{pid}/likes",
+                        token=TK,
+                        check=lambda d: f"total={d.get('total',0)}")
+
+# ── Message reactions ──────────────────────────────────────────────────────
+sec("MESSAGE REACTIONS")
+
+_thr_list, _ = call("GET", "/v1/threads", token=TK)
+_react_thread = None
+_react_msg = None
+if _thr_list and _thr_list.get("code") == 1 and _thr_list["data"].get("data"):
+    for thr in _thr_list["data"]["data"]:
+        _msgs, _ = call("GET", f"/v1/threads/{thr['id']}/messages", token=TK)
+        if _msgs and _msgs.get("code") == 1 and _msgs["data"].get("data"):
+            _react_thread = thr
+            _react_msg = _msgs["data"]["data"][0]
+            break
+
+if _react_thread and _react_msg:
+    tid = _react_thread["id"]
+    mid = _react_msg["id"]
+
+    # Add reaction
+    test("POST /v1/threads/:id/messages/:id/react (❤️)", "POST",
+         f"/v1/threads/{tid}/messages/{mid}/react",
+         body={"emoji": "❤️"}, token=TK,
+         check=lambda d: f"emoji={d.get('emoji')} reacted={d.get('reacted',True)}")
+
+    # Add different emoji
+    test("POST /v1/threads/:id/messages/:id/react (👍)", "POST",
+         f"/v1/threads/{tid}/messages/{mid}/react",
+         body={"emoji": "👍"}, token=TK,
+         check=lambda d: f"emoji={d.get('emoji')}")
+
+    # Get grouped reactions
+    test("GET /v1/threads/:id/messages/:id/reactions", "GET",
+         f"/v1/threads/{tid}/messages/{mid}/reactions",
+         token=TK,
+         check=lambda d: f"total={d.get('total',0)} groups={len(d.get('summary',[]))}")
+
+    # Toggle off ❤️
+    test("POST /v1/threads/:id/messages/:id/react (❤️ toggle off)", "POST",
+         f"/v1/threads/{tid}/messages/{mid}/react",
+         body={"emoji": "❤️"}, token=TK,
+         check=lambda d: f"reacted={d.get('reacted')}")
+
+    # Reactions after toggle-off
+    test("GET /v1/threads/:id/messages/:id/reactions (after toggle)", "GET",
+         f"/v1/threads/{tid}/messages/{mid}/reactions",
+         token=TK,
+         check=lambda d: f"total={d.get('total',0)} groups={len(d.get('summary',[]))}")
+
+    # 404 for unknown message
+    _bad_react, _ = call("POST", f"/v1/threads/{tid}/messages/nonexistent/react", {"emoji": "👍"}, token=TK)
+    if _bad_react and _bad_react.get("code") == 0:
+        print("  ✅ POST /v1/threads/.../react (bad msg) → correct 404")
+        results["pass"].append("Reaction 404 for unknown message")
+    else:
+        print("  ❌ Reaction on unknown message should 404")
+        results["fail"].append(("Reaction 404 for unknown message", "Expected code=0"))
+
+# ── Interest Graph behavioral signals ──────────────────────────────────────
+sec("INTEREST BEHAVIORAL SIGNALS")
+
+# Get tag IDs from taxonomy
+_tax, _ = call("GET", "/v1/interests/taxonomy", token=TK)
+_signal_tag = None
+_signal_tag2 = None
+if _tax and _tax.get("code") == 1:
+    for dim, tags in _tax["data"].items():
+        if tags and not _signal_tag:
+            _signal_tag = tags[0]
+        elif tags and not _signal_tag2:
+            _signal_tag2 = tags[0]
+        if _signal_tag and _signal_tag2:
+            break
+
+if _signal_tag:
+    # First signal on the tag
+    test("POST /v1/interests/signal (job_view)", "POST", "/v1/interests/signal",
+         body={"tag_id": _signal_tag["id"], "source": "job_view", "strength": 0.15},
+         token=TK,
+         check=lambda d: f"weight={d.get('weight',0):.3f} source={d.get('source')}")
+
+    # Second signal — weight should increase
+    test("POST /v1/interests/signal (reinforce)", "POST", "/v1/interests/signal",
+         body={"tag_id": _signal_tag["id"], "source": "hub_visit", "strength": 0.1},
+         token=TK,
+         check=lambda d: f"weight={d.get('weight',0):.3f}")
+
+if _signal_tag2:
+    # Brand-new implicit interest (may not be in profile yet)
+    test("POST /v1/interests/signal (new implicit)", "POST", "/v1/interests/signal",
+         body={"tag_id": _signal_tag2["id"], "source": "profile_view", "strength": 0.05},
+         token=TK,
+         check=lambda d: f"weight={d.get('weight',0):.3f} source={d.get('source')}")
+
+# Error: missing tag_id
+_no_tag, _ = call("POST", "/v1/interests/signal", {"strength": 0.1}, token=TK)
+if _no_tag and _no_tag.get("code") == 0:
+    print("  ✅ POST /v1/interests/signal (no tag_id) → correctly rejected")
+    results["pass"].append("Interest signal missing tag_id rejected")
+else:
+    results["fail"].append(("Interest signal missing tag_id", "Expected code=0"))
+
+# Error: invalid tag_id
+_bad_tag, _ = call("POST", "/v1/interests/signal", {"tag_id": "fake-uuid", "strength": 0.1}, token=TK)
+if _bad_tag and _bad_tag.get("code") == 0:
+    print("  ✅ POST /v1/interests/signal (bad tag_id) → correctly rejected")
+    results["pass"].append("Interest signal bad tag_id rejected")
+else:
+    results["fail"].append(("Interest signal bad tag_id", "Expected code=0"))
+
+# ── Dating profile extras ─────────────────────────────────────────────────
+sec("DATING PROFILE EXTRAS")
+
+# Update with all new fields
+test("PUT /v1/profile/me/dating (birth_year+gender)", "PUT", "/v1/profile/me/dating",
+     body={"birth_year": 1997, "gender": "male", "looking_for_gender": "female",
+           "discoverability": "discoverable", "age_min": 22, "age_max": 35},
+     token=TK,
+     check=lambda d: f"age={d.get('age')} gender={d.get('gender')} disc={d.get('discoverability')}")
+
+# Pause discoverability
+test("PUT /v1/profile/me/dating (pause)", "PUT", "/v1/profile/me/dating",
+     body={"discoverability": "paused"},
+     token=TK,
+     check=lambda d: f"discoverability={d.get('discoverability')}")
+
+# Restore
+test("PUT /v1/profile/me/dating (restore)", "PUT", "/v1/profile/me/dating",
+     body={"discoverability": "discoverable"},
+     token=TK,
+     check=lambda d: f"discoverability={d.get('discoverability')}")
+
+# Invalid discoverability value
+_bad_disc, _ = call("PUT", "/v1/profile/me/dating",
+                    {"discoverability": "invisible"}, token=TK)
+if _bad_disc and _bad_disc.get("code") == 0:
+    print("  ✅ PUT /v1/profile/me/dating (bad discoverability) → correctly rejected")
+    results["pass"].append("Dating bad discoverability rejected")
+else:
+    print("  ❌ Bad discoverability should be rejected")
+    results["fail"].append(("Dating bad discoverability rejected", "Expected code=0"))
+
+# Verify age derived from birth_year in response
+test("GET /v1/profile/me/dating (age derived)", "GET", "/v1/profile/me/dating",
+     token=TK,
+     check=lambda d: f"age={d.get('age')} birth_year={d.get('birth_year')} disc={d.get('discoverability')}")
+
 # ── Summary ────────────────────────────────────────────────────────────────
 total = len(results["pass"]) + len(results["fail"])
 print(f"\n{'='*65}")

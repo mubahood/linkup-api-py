@@ -65,6 +65,26 @@ class HubMembership(db.Model):
         }
 
 
+class HubPostLike(db.Model):
+    __tablename__ = 'lu_hub_post_likes'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = db.Column(db.String(36), db.ForeignKey('lu_hub_posts.id', ondelete='CASCADE'), nullable=False)
+    account_id = db.Column(db.String(36), db.ForeignKey('lu_accounts.id', ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    account = db.relationship('Account', foreign_keys=[account_id], lazy='joined')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'post_id': self.post_id,
+            'account_id': self.account_id,
+            'account': self.account.to_dict() if self.account else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class HubPost(db.Model):
     __tablename__ = 'lu_hub_posts'
 

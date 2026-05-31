@@ -54,6 +54,44 @@ def my_jobs(account):
     return paginated_response([_enrich_job(j, account.id) for j in items], total, page, per_page, 'My jobs loaded.')
 
 
+@jobs_bp.route('/saved', methods=['GET'])
+@lu_jwt_required
+def saved_jobs(account):
+    """Jobs I saved/bookmarked."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    # Join SavedJob → Job, ordered by when saved
+    query = (
+        db.session.query(Job)
+        .join(SavedJob, SavedJob.job_id == Job.id)
+        .filter(SavedJob.account_id == account.id)
+        .order_by(SavedJob.created_at.desc())
+    )
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    return paginated_response([_enrich_job(j, account.id) for j in items], total, page, per_page, 'Saved jobs loaded.')
+
+
+@jobs_bp.route('/applications', methods=['GET'])
+@lu_jwt_required
+def my_applications(account):
+    """Jobs I have applied for."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    status_filter = request.args.get('status', '')
+    query = Application.query.filter_by(applicant_id=account.id)
+    if status_filter:
+        query = query.filter(Application.status == status_filter)
+    query = query.order_by(Application.created_at.desc())
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    result = []
+    for app in items:
+        job = db.session.get(Job, app.job_id)
+        entry = app.to_dict()
+        entry['job'] = _enrich_job(job, account.id) if job else None
+        result.append(entry)
+    return paginated_response(result, total, page, per_page, 'My applications loaded.')
+
+
 @jobs_bp.route('', methods=['POST'])
 @lu_jwt_required
 def post_job(account):

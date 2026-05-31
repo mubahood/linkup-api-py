@@ -12,10 +12,22 @@ from backend.domains.profile.models import DatingProfile
 def get_deck(account_id: str, limit: int = 20) -> list:
     """
     Generate a discovery deck ordered by Interest Graph compatibility.
-    Excludes: already-acted-on, blocked, self.
+
+    Excludes:
+    - Already acted-on profiles
+    - Blocked accounts (both directions)
+    - Heavily-reported accounts
+    - Self
+    - Paused / incognito profiles (discoverability)
+
+    Filters:
+    - Actor's age preference vs candidate's birth_year
+    - Candidate's age preference vs actor's birth_year
+    - Gender preference (soft match — never hard-reject if no preference set)
     """
     import json
-    from backend.domains.safety.models import Block
+    from datetime import date
+    from backend.domains.safety.models import Block, Report
     from backend.shared.scoring.interest_graph import rank_candidates
 
     # Exclude acted-on + blocked (both directions) + self
@@ -24,30 +36,80 @@ def get_deck(account_id: str, limit: int = 20) -> list:
         {b.blocked_id for b in Block.query.filter_by(blocker_id=account_id).all()} |
         {b.blocker_id for b in Block.query.filter_by(blocked_id=account_id).all()}
     )
-    excluded = acted_ids | blocked_ids | {account_id}
+    # Heavily-reported accounts (reported ≥3 times) get excluded from deck
+    from sqlalchemy import func
+    reported_counts = (
+        db.session.query(Report.target_account_id, func.count(Report.id).label('cnt'))
+        .group_by(Report.target_account_id)
+        .having(func.count(Report.id) >= 3)
+        .all()
+    )
+    reported_ids = {row[0] for row in reported_counts}
 
-    # Fetch a wider pool (3× limit) to allow scoring + filtering
-    pool_size = limit * 3
-    query = db.session.query(Account).join(
+    excluded = acted_ids | blocked_ids | reported_ids | {account_id}
+
+    # Fetch a wider pool (5× limit) to allow filtering + scoring
+    pool_size = limit * 5
+    query = db.session.query(Account, DatingProfile).join(
         DatingProfile, DatingProfile.account_id == Account.id
     ).filter(
         Account.id.notin_(excluded) if excluded else True,
         Account.account_status == 'active',
         Account.deleted_at.is_(None),
+        DatingProfile.discoverability == 'discoverable',  # paused/incognito excluded
     ).limit(pool_size)
-    accounts = query.all()
+    rows = query.all()
 
-    # Filter to sparks-enabled accounts
+    # Load actor's own dating profile for preference matching
+    actor_dating = DatingProfile.query.filter_by(account_id=account_id).first()
+    actor_birth_year = actor_dating.birth_year if actor_dating else None
+    actor_age = (date.today().year - actor_birth_year) if actor_birth_year else None
+    actor_gender = actor_dating.gender if actor_dating else None
+    actor_age_min = actor_dating.age_min if actor_dating else 18
+    actor_age_max = actor_dating.age_max if actor_dating else 99
+    actor_looking_for = actor_dating.looking_for_gender if actor_dating else None
+
+    current_year = date.today().year
+
     sparks_accounts = []
-    for acc in accounts:
+    dating_map: dict = {}
+
+    for acc, dp in rows:
+        # Check sparks mode enabled
         modes = acc.modes_enabled or {}
         if isinstance(modes, str):
             try:
                 modes = json.loads(modes)
             except Exception:
                 modes = {}
-        if modes.get('sparks', False):
-            sparks_accounts.append(acc)
+        if not modes.get('sparks', False):
+            continue
+
+        # Age preference filter (soft — skip if no birth_year data)
+        if dp.birth_year:
+            candidate_age = current_year - dp.birth_year
+            # Actor's preference: is candidate within actor's preferred age range?
+            if candidate_age < actor_age_min or candidate_age > actor_age_max:
+                continue
+            # Candidate's preference: is actor within candidate's preferred range?
+            if actor_age:
+                cand_min = dp.age_min or 18
+                cand_max = dp.age_max or 99
+                if actor_age < cand_min or actor_age > cand_max:
+                    continue
+
+        # Gender preference filter (soft — only apply if both sides set preferences)
+        if actor_looking_for and dp.gender:
+            if actor_looking_for.lower() not in ('any', 'all', '') and \
+               dp.gender.lower() != actor_looking_for.lower():
+                continue
+        if dp.looking_for_gender and actor_gender:
+            if dp.looking_for_gender.lower() not in ('any', 'all', '') and \
+               actor_gender.lower() != dp.looking_for_gender.lower():
+                continue
+
+        sparks_accounts.append(acc)
+        dating_map[acc.id] = dp
 
     if not sparks_accounts:
         return []
@@ -58,12 +120,6 @@ def get_deck(account_id: str, limit: int = 20) -> list:
 
     # Build result in ranked order (up to limit)
     acc_map = {acc.id: acc for acc in sparks_accounts}
-    dating_map = {
-        dp.account_id: dp
-        for dp in DatingProfile.query.filter(
-            DatingProfile.account_id.in_(candidate_ids)
-        ).all()
-    }
 
     result = []
     for cid, score in ranked[:limit]:

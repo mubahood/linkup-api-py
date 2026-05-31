@@ -49,6 +49,10 @@ class DatingProfile(db.Model):
     bio = db.Column(db.Text, nullable=True)
     age_min = db.Column(db.SmallInteger, default=18)
     age_max = db.Column(db.SmallInteger, default=40)
+    birth_year = db.Column(db.SmallInteger, nullable=True)
+    discoverability = db.Column(db.String(20), default='discoverable')
+    gender = db.Column(db.String(30), nullable=True)
+    looking_for_gender = db.Column(db.String(30), nullable=True)
     intent = db.Column(db.String(30), default='open')
     lifestyle = db.Column(db.JSON, nullable=True)
     prompts = db.Column(db.JSON, nullable=True)
@@ -56,13 +60,22 @@ class DatingProfile(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
+        from datetime import date
+        age = None
+        if self.birth_year:
+            age = date.today().year - self.birth_year
         return {
             'id': self.id,
             'account_id': self.account_id,
             'display_name': self.display_name,
             'bio': self.bio,
+            'age': age,
+            'birth_year': self.birth_year,
             'age_min': self.age_min,
             'age_max': self.age_max,
+            'discoverability': self.discoverability or 'discoverable',
+            'gender': self.gender,
+            'looking_for_gender': self.looking_for_gender,
             'intent': self.intent,
             'lifestyle': self.lifestyle,
             'prompts': self.prompts,

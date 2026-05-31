@@ -104,6 +104,66 @@ def remove_interest(account, tag_id):
     return success_response('Interest removed.')
 
 
+@interest_bp.route('/signal', methods=['POST'])
+@lu_jwt_required
+def signal_interest(account):
+    """
+    Behavioral interest reinforcement signal.
+
+    The mobile app calls this when a user meaningfully engages with content
+    (e.g. clicks into a job, views a hub, opens a profile).
+
+    Body: {
+      "tag_id": "<uuid>",          # interest tag that was signaled
+      "source": "job_view",        # event type: job_view | hub_visit | profile_view | search_click | ...
+      "strength": 0.1              # reinforcement magnitude 0–1 (default 0.1)
+    }
+
+    Behavior:
+    - If the tag exists in the user's profile, add `strength` to weight (capped at 1.0)
+    - If not present, create a new implicit interest with weight=`strength`, source='inferred_behavior'
+    - Pinned interests are never modified
+    """
+    data = request.get_json(silent=True) or {}
+    tag_id = (data.get('tag_id') or '').strip()
+    source = (data.get('source') or 'behavior').strip()[:30]
+    strength = min(max(float(data.get('strength', 0.1)), 0.0), 1.0)
+
+    if not tag_id:
+        return error_response('tag_id is required.')
+
+    tag = db.session.get(InterestTag, tag_id)
+    if not tag:
+        return error_response('Interest tag not found.', status_code=404)
+
+    from datetime import datetime
+    ip = InterestProfile.query.filter_by(account_id=account.id, tag_id=tag_id).first()
+    if ip:
+        if not ip.pinned:
+            ip.weight = min(1.0, float(ip.weight or 0.5) + strength)
+            ip.source = 'behavioral' if ip.source not in ('explicit',) else ip.source
+            ip.last_signaled = datetime.utcnow()
+        return success_response('Interest reinforced.', ip.to_dict())
+    else:
+        ip = InterestProfile(
+            id=str(uuid.uuid4()),
+            account_id=account.id,
+            tag_id=tag_id,
+            weight=strength,
+            mode='professional',
+            source='behavioral',
+            last_signaled=datetime.utcnow(),
+        )
+        db.session.add(ip)
+
+    # Increment tag popularity counter
+    if tag.popularity is not None:
+        tag.popularity = tag.popularity + 1
+
+    db.session.commit()
+    return success_response('Interest signal recorded.', ip.to_dict(), status_code=201)
+
+
 @interest_bp.route('/suggestions', methods=['GET'])
 @lu_jwt_required
 def suggestions(account):

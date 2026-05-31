@@ -33,6 +33,37 @@ def list_events(account):
     return paginated_response([_enrich_event(e, account.id) for e in items], total, page, per_page, 'Events loaded.')
 
 
+@events_bp.route('/mine', methods=['GET'])
+@lu_jwt_required
+def my_events(account):
+    """Events I created (past + upcoming)."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    query = Event.query.filter_by(created_by=account.id).order_by(Event.start_at.desc())
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    return paginated_response([_enrich_event(e, account.id) for e in items], total, page, per_page, 'My events loaded.')
+
+
+@events_bp.route('/going', methods=['GET'])
+@lu_jwt_required
+def events_going(account):
+    """Events I've RSVP'd 'going' to (upcoming only)."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    query = (
+        Event.query
+        .join(EventRSVP, EventRSVP.event_id == Event.id)
+        .filter(
+            EventRSVP.account_id == account.id,
+            EventRSVP.status == 'going',
+            Event.start_at >= datetime.utcnow(),
+        )
+        .order_by(Event.start_at.asc())
+    )
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    return paginated_response([_enrich_event(e, account.id) for e in items], total, page, per_page, 'Attending events loaded.')
+
+
 @events_bp.route('', methods=['POST'])
 @lu_jwt_required
 def create_event(account):

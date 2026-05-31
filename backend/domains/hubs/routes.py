@@ -4,7 +4,7 @@ Hubs routes: /v1/hubs/*
 import uuid
 from flask import Blueprint, request
 from backend.models import db
-from backend.domains.hubs.models import Hub, HubMembership, HubPost
+from backend.domains.hubs.models import Hub, HubMembership, HubPost, HubPostLike
 from backend.domains.hubs.service import generate_slug
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.utils.response import success_response, error_response, paginated_response
@@ -180,6 +180,63 @@ def create_post(account, hub_id):
     db.session.add(post)
     db.session.commit()
     return success_response('Post created.', post.to_dict(), status_code=201)
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/like', methods=['POST'])
+@lu_jwt_required
+def like_post(account, hub_id, post_id):
+    """Toggle like on a hub post."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
+        HubPost.deleted_at.is_(None)
+    ).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    existing = HubPostLike.query.filter_by(post_id=post_id, account_id=account.id).first()
+    if existing:
+        # Unlike
+        db.session.delete(existing)
+        post.like_count = max(0, (post.like_count or 0) - 1)
+        db.session.commit()
+        return success_response('Post unliked.', {'liked': False, 'like_count': post.like_count})
+    # Like
+    like = HubPostLike(
+        id=str(uuid.uuid4()),
+        post_id=post_id,
+        account_id=account.id,
+    )
+    db.session.add(like)
+    post.like_count = (post.like_count or 0) + 1
+    db.session.commit()
+    # Notify the post author (skip self-like)
+    if post.account_id != account.id:
+        try:
+            from backend.domains.notifications.service import create_notification
+            create_notification(
+                account_id=post.account_id,
+                notif_type='post.liked',
+                title=f'{account.display_name} liked your post',
+                body=post.content[:80] if post.content else '',
+                data={'post_id': post_id, 'hub_id': hub_id, 'liker_id': account.id},
+                action_url=f'/hubs/{hub_id}',
+            )
+        except Exception:
+            pass
+    return success_response('Post liked.', {'liked': True, 'like_count': post.like_count})
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/likes', methods=['GET'])
+@lu_jwt_required
+def post_likes(account, hub_id, post_id):
+    """List accounts who liked a post."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    query = HubPostLike.query.filter_by(post_id=post_id).order_by(HubPostLike.created_at.desc())
+    from backend.shared.utils.pagination import paginate_query
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    return paginated_response([l.to_dict() for l in items], total, page, per_page, 'Likes loaded.')
 
 
 @hubs_bp.route('/<hub_id>/posts/<post_id>', methods=['DELETE'])

@@ -25,6 +25,26 @@ def list_notifications(account):
     return paginated_response([n.to_dict() for n in items], total, page, per_page, 'Notifications loaded.')
 
 
+@notifications_bp.route('/unread-count', methods=['GET'])
+@lu_jwt_required
+def unread_count(account):
+    """Lightweight badge count — returns just the number."""
+    count = Notification.query.filter_by(account_id=account.id, is_read=0).count()
+    return success_response('Unread count loaded.', {'unread_count': count})
+
+
+@notifications_bp.route('/<notif_id>/read', methods=['POST'])
+@lu_jwt_required
+def mark_one_read(account, notif_id):
+    """Mark a single notification as read."""
+    notif = Notification.query.filter_by(id=notif_id, account_id=account.id).first()
+    if not notif:
+        return error_response('Notification not found.', status_code=404)
+    notif.is_read = 1
+    db.session.commit()
+    return success_response('Notification read.', notif.to_dict())
+
+
 @notifications_bp.route('/read', methods=['POST'])
 @lu_jwt_required
 def mark_read(account):

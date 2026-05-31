@@ -368,27 +368,42 @@ def _run_seed():
 
     # ── Dating Profiles ───────────────────────────────────────────────────────
     from backend.domains.profile.models import DatingProfile
+    # Columns: handle, display_name, bio, age_min, age_max, birth_year, gender, looking_for, intent, lifestyle
     dating_seeds = [
-        ('samuel-ocen',    'Sam', 'Engineer by day, football fan by weekend. Looking for someone to explore Kampala with.', 24, 34, 'serious', {'fitness': 'active', 'family': 'open'}),
-        ('aisha-nakayima', 'Aisha', 'Designer and problem solver. Love hiking, reading, and honest conversations.', 23, 33, 'serious', {'fitness': 'moderate', 'family': 'open'}),
-        ('henry-kiwanuka', 'Henry', 'Remote-first dev, loves quiet coffee spots and spontaneous road trips.', 25, 35, 'serious', {'fitness': 'moderate', 'family': 'wants_kids'}),
-        ('grace-atim',     'Grace', 'People person, HR specialist, and Sunday church-goer. Looking for depth over speed.', 24, 32, 'serious', {'family': 'wants_kids'}),
-        ('david-ochieng',  'David', 'Data nerd by week. Farmer at heart. Will cook you Ugandan dishes.', 23, 31, 'casual', {'fitness': 'active'}),
-        ('olivia-nansubuga','Olivia','Psychologist. Believes in healing, growth, and long walks.', 26, 36, 'serious', {'fitness': 'moderate', 'family': 'open'}),
-        ('irene-nalubega', 'Irene', 'Brand strategist. Vintage fashion lover. Will out-debate you on marketing.', 23, 32, 'casual', {}),
-        ('felix-mugisha',  'Felix', 'Telecoms engineer, MTN fan, and loud football commentator.', 25, 35, 'open', {'fitness': 'active'}),
-        ('kate-achieng',   'Kate', 'Lawyer and bookworm. Tea not coffee. Looking for substance.', 27, 37, 'serious', {'family': 'open'}),
-        ('noah-tumusiime', 'Noah', 'AgTech consultant. Always in the village. Loves the land.', 24, 34, 'open', {'fitness': 'active'}),
+        ('samuel-ocen',    'Sam',   'Engineer by day, football fan by weekend. Exploring Kampala one coffee at a time.', 22, 34, 1997, 'male',   'female', 'serious',  {'fitness': 'active', 'family': 'open'}),
+        ('aisha-nakayima', 'Aisha', 'Designer and problem solver. Love hiking, reading, and honest conversations.',      20, 32, 1999, 'female', 'male',   'serious',  {'fitness': 'moderate', 'family': 'open'}),
+        ('henry-kiwanuka', 'Henry', 'Remote-first dev, loves quiet coffee spots and spontaneous road trips.',           24, 35, 1995, 'male',   'female', 'serious',  {'fitness': 'moderate', 'family': 'wants_kids'}),
+        ('grace-atim',     'Grace', 'HR specialist and Sunday church-goer. Looking for depth over speed.',              22, 33, 1997, 'female', 'male',   'serious',  {'family': 'wants_kids'}),
+        ('david-ochieng',  'David', 'Data nerd by week. Farmer at heart. Will cook you Ugandan dishes.',               21, 32, 1998, 'male',   'female', 'casual',   {'fitness': 'active'}),
+        ('olivia-nansubuga','Olivia','Psychologist. Believes in healing, growth, and long walks.',                      24, 36, 1995, 'female', 'male',   'serious',  {'fitness': 'moderate', 'family': 'open'}),
+        ('irene-nalubega', 'Irene', 'Brand strategist. Vintage fashion lover. Will out-debate you on marketing.',       22, 33, 1998, 'female', 'male',   'casual',   {}),
+        ('felix-mugisha',  'Felix', 'Telecoms engineer, MTN fan, and loud football commentator.',                       23, 35, 1996, 'male',   'female', 'open',     {'fitness': 'active'}),
+        ('kate-achieng',   'Kate',  'Lawyer and bookworm. Tea not coffee. Looking for substance.',                      25, 37, 1993, 'female', 'male',   'serious',  {'family': 'open'}),
+        ('noah-tumusiime', 'Noah',  'AgTech consultant. Always in the village. Loves the land.',                        22, 34, 1997, 'male',   'female', 'open',     {'fitness': 'active'}),
     ]
-    for handle, dname, bio, age_min, age_max, intent, lifestyle in dating_seeds:
+    for handle, dname, bio, age_min, age_max, birth_year, gender, looking_for, intent, lifestyle in dating_seeds:
         a_id = account_ids.get(handle)
-        if a_id and not DatingProfile.query.filter_by(account_id=a_id).first():
-            db.session.add(DatingProfile(
-                id=gen_id(), account_id=a_id, display_name=dname,
-                bio=bio, age_min=age_min, age_max=age_max,
-                intent=intent, lifestyle=lifestyle,
-                prompts=[{'question': 'My ideal weekend', 'answer': f'Something outdoors with good company — {dname} style.'}],
-            ))
+        if a_id:
+            dp = DatingProfile.query.filter_by(account_id=a_id).first()
+            if not dp:
+                db.session.add(DatingProfile(
+                    id=gen_id(), account_id=a_id, display_name=dname,
+                    bio=bio, age_min=age_min, age_max=age_max,
+                    birth_year=birth_year, gender=gender, looking_for_gender=looking_for,
+                    discoverability='discoverable',
+                    intent=intent, lifestyle=lifestyle,
+                    prompts=[{'question': 'My ideal weekend', 'answer': f'Something outdoors with good company — {dname} style.'}],
+                ))
+            else:
+                # Update existing with new fields if they're missing
+                if not dp.birth_year:
+                    dp.birth_year = birth_year
+                if not dp.gender:
+                    dp.gender = gender
+                if not dp.looking_for_gender:
+                    dp.looking_for_gender = looking_for
+                if not dp.discoverability:
+                    dp.discoverability = 'discoverable'
     db.session.commit()
     logger.info(f'[seed] Dating profiles done ({len(dating_seeds)} profiles)')
 

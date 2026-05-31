@@ -9,7 +9,7 @@ from backend.domains.profile.models import ProfessionalProfile, DatingProfile, E
 from backend.domains.profile.service import calculate_completion
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.utils.response import success_response, error_response
-from backend.shared.storage.local import save_upload
+from backend.shared.storage.r2 import save_upload
 
 profile_bp = Blueprint('v1_profile', __name__, url_prefix='/v1/profile')
 
@@ -145,12 +145,19 @@ def update_dating_profile(account):
         'open': 'open',
     }
 
-    for field in ['display_name', 'bio', 'age_min', 'age_max', 'intent', 'lifestyle', 'prompts']:
+    valid_disc = {'discoverable', 'paused', 'incognito'}
+    for field in ['display_name', 'bio', 'age_min', 'age_max', 'birth_year',
+                  'gender', 'looking_for_gender', 'intent', 'lifestyle', 'prompts']:
         if field in data:
             val = data[field]
             if field == 'intent' and isinstance(val, str):
                 val = intent_map.get(val.lower(), val)
             setattr(prof, field, val)
+    if 'discoverability' in data:
+        disc = data['discoverability']
+        if disc not in valid_disc:
+            return error_response(f'discoverability must be one of: {", ".join(valid_disc)}')
+        prof.discoverability = disc
 
     try:
         db.session.commit()

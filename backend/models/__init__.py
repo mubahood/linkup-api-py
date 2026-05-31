@@ -19,8 +19,8 @@ from backend.domains.profile.models import ProfessionalProfile, DatingProfile, E
 from backend.domains.interest.models import InterestTag, InterestProfile
 from backend.domains.links.models import Link
 from backend.domains.sparks.models import Spark, Match
-from backend.domains.hubs.models import Hub, HubMembership, HubPost
-from backend.domains.chat.models import Thread, ThreadParticipant, Message
+from backend.domains.hubs.models import Hub, HubMembership, HubPost, HubPostLike
+from backend.domains.chat.models import Thread, ThreadParticipant, Message, MessageReaction
 from backend.domains.jobs.models import Job, Application, SavedJob
 from backend.domains.events.models import Event, EventRSVP
 from backend.domains.notifications.models import Notification

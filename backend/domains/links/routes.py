@@ -138,6 +138,25 @@ def decline_request(account, link_id):
     return success_response('Link request declined.')
 
 
+@links_bp.route('/<link_id>', methods=['GET'])
+@lu_jwt_required
+def link_detail(account, link_id):
+    """Get a single link with both account profiles."""
+    link = Link.query.filter(
+        Link.id == link_id,
+        or_(Link.requester_id == account.id, Link.addressee_id == account.id)
+    ).first()
+    if not link:
+        return error_response('Link not found.', status_code=404)
+    from backend.domains.identity.models import Account
+    requester = db.session.get(Account, link.requester_id)
+    addressee = db.session.get(Account, link.addressee_id)
+    data = link.to_dict(account.id)
+    data['requester'] = requester.to_dict() if requester else None
+    data['addressee'] = addressee.to_dict() if addressee else None
+    return success_response('Link loaded.', data)
+
+
 @links_bp.route('/<link_id>', methods=['DELETE'])
 @lu_jwt_required
 def remove_link(account, link_id):

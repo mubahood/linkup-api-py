@@ -5,7 +5,7 @@ import uuid
 from flask import Blueprint, request
 from backend.models import db
 from backend.domains.interest.models import InterestTag, InterestProfile
-from backend.domains.interest.service import get_taxonomy, get_suggestions
+from backend.domains.interest.service import get_taxonomy, get_suggestions, apply_decay
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.utils.response import success_response, error_response
 
@@ -37,9 +37,16 @@ def search():
 @interest_bp.route('/me', methods=['GET'])
 @lu_jwt_required
 def my_interests(account):
-    """Get my interest weights."""
+    """Get my interest weights with on-read decay applied."""
+    show_decay = request.args.get('with_decay', '').lower() == 'true'
     profiles = InterestProfile.query.filter_by(account_id=account.id).all()
-    return success_response('Interests loaded.', [p.to_dict() for p in profiles])
+    result = []
+    for p in profiles:
+        d = p.to_dict()
+        if show_decay:
+            d['effective_weight'] = apply_decay(p)
+        result.append(d)
+    return success_response('Interests loaded.', result)
 
 
 @interest_bp.route('/me', methods=['POST'])

@@ -1,7 +1,32 @@
 """
-Interest service: taxonomy, suggestion logic.
+Interest service: taxonomy, suggestion logic, weight decay.
 """
+from datetime import datetime
 from backend.domains.interest.models import InterestTag, InterestProfile
+
+
+# Default decay rate: 2% per month (per CORE_DATA_MODEL.md §4.3)
+DEFAULT_DECAY_RATE = 0.02
+
+
+def apply_decay(ip: 'InterestProfile') -> float:
+    """
+    Calculate the decayed weight for an InterestProfile.
+    Decay formula: w * (1 - rate)^months_since_last_signal
+    Pinned interests never decay. Explicit (user-declared) interests decay at half rate.
+    Returns the decayed weight (does NOT persist — call this on read for display).
+    """
+    if ip.pinned:
+        return float(ip.weight or 0.5)
+
+    last_signaled = ip.last_signaled or ip.created_at
+    if not last_signaled:
+        return float(ip.weight or 0.5)
+
+    months_elapsed = max(0.0, (datetime.utcnow() - last_signaled).days / 30.0)
+    rate = DEFAULT_DECAY_RATE if ip.source != 'explicit' else DEFAULT_DECAY_RATE / 2
+    decayed = float(ip.weight or 0.5) * ((1 - rate) ** months_elapsed)
+    return max(0.01, round(decayed, 4))  # never go fully to zero
 
 
 def get_taxonomy() -> dict:

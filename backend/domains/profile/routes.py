@@ -127,6 +127,37 @@ def get_dating_profile(account):
     return success_response('Dating profile loaded.', prof.to_dict() if prof else None)
 
 
+@profile_bp.route('/me/dating', methods=['DELETE'])
+@lu_jwt_required
+def delete_dating_profile(account):
+    """Remove dating profile — sets discoverability to paused (soft) or deletes record."""
+    prof = DatingProfile.query.filter_by(account_id=account.id).first()
+    if not prof:
+        return error_response('No dating profile found.', status_code=404)
+    # Soft approach: set discoverability=paused so they can restore later
+    # Hard delete available via ?permanent=true
+    permanent = request.args.get('permanent', '').lower() == 'true'
+    if permanent:
+        db.session.delete(prof)
+        # Also disable sparks mode
+        modes = account.modes_enabled or {}
+        if isinstance(modes, str):
+            import json
+            try:
+                modes = json.loads(modes)
+            except Exception:
+                modes = {}
+        modes['sparks'] = False
+        account.modes_enabled = modes
+        db.session.commit()
+        return success_response('Dating profile deleted permanently.')
+    # Soft: pause discoverability
+    prof.discoverability = 'paused'
+    db.session.commit()
+    return success_response('Dating profile paused. You are no longer visible in Sparks.',
+                            prof.to_dict())
+
+
 @profile_bp.route('/me/dating', methods=['PUT'])
 @lu_jwt_required
 def update_dating_profile(account):

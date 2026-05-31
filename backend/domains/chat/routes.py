@@ -127,6 +127,35 @@ def post_message(account, thread_id):
     return success_response('Message sent.', msg.to_dict(), status_code=201)
 
 
+@chat_v1_bp.route('/<thread_id>/messages/<message_id>', methods=['DELETE'])
+@lu_jwt_required
+def delete_message(account, thread_id, message_id):
+    """
+    Delete / unsend a message.
+    - Sender can delete within 24 hours (soft-delete: body replaced)
+    - After 24h, returns 403 (message is part of conversation history)
+    """
+    participant = ThreadParticipant.query.filter_by(thread_id=thread_id, account_id=account.id).first()
+    if not participant:
+        return error_response('Thread not found.', status_code=404)
+    msg = Message.query.filter_by(id=message_id, thread_id=thread_id).filter(
+        Message.deleted_at.is_(None)
+    ).first()
+    if not msg:
+        return error_response('Message not found.', status_code=404)
+    if msg.sender_id != account.id:
+        return error_response('You can only delete your own messages.', status_code=403)
+    # Allow deletion within 24 hours
+    from datetime import timedelta
+    age = datetime.utcnow() - msg.created_at
+    if age > timedelta(hours=24):
+        return error_response('Messages can only be deleted within 24 hours of sending.', status_code=403)
+    msg.deleted_at = datetime.utcnow()
+    msg.body = '[Message deleted]'
+    db.session.commit()
+    return success_response('Message deleted.')
+
+
 @chat_v1_bp.route('/<thread_id>/messages/<message_id>/react', methods=['POST'])
 @lu_jwt_required
 def react_message(account, thread_id, message_id):

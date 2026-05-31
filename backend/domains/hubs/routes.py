@@ -4,7 +4,7 @@ Hubs routes: /v1/hubs/*
 import uuid
 from flask import Blueprint, request
 from backend.models import db
-from backend.domains.hubs.models import Hub, HubMembership, HubPost, HubPostLike
+from backend.domains.hubs.models import Hub, HubMembership, HubPost, HubPostLike, HubPostComment
 from backend.domains.hubs.service import generate_slug
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.utils.response import success_response, error_response, paginated_response
@@ -237,6 +237,158 @@ def post_likes(account, hub_id, post_id):
     from backend.shared.utils.pagination import paginate_query
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
     return paginated_response([l.to_dict() for l in items], total, page, per_page, 'Likes loaded.')
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>', methods=['PUT'])
+@lu_jwt_required
+def edit_post(account, hub_id, post_id):
+    """Edit a hub post — author only."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
+        HubPost.deleted_at.is_(None)
+    ).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    if post.account_id != account.id:
+        return error_response('You can only edit your own posts.', status_code=403)
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return error_response('Post content is required.')
+    post.content = content
+    if 'media' in data:
+        post.media = data['media']
+    db.session.commit()
+    return success_response('Post updated.', post.to_dict())
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/comments', methods=['GET'])
+@lu_jwt_required
+def list_comments(account, hub_id, post_id):
+    """List comments on a hub post."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
+        HubPost.deleted_at.is_(None)
+    ).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    # Top-level comments only (no parent_id), include soft-deleted for threading
+    query = HubPostComment.query.filter_by(post_id=post_id, parent_id=None).order_by(
+        HubPostComment.created_at.asc()
+    )
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+
+    result = []
+    for comment in items:
+        d = comment.to_dict()
+        # Attach replies (one level deep for Phase 1)
+        replies = HubPostComment.query.filter_by(
+            post_id=post_id, parent_id=comment.id
+        ).order_by(HubPostComment.created_at.asc()).limit(5).all()
+        d['replies'] = [r.to_dict() for r in replies]
+        d['reply_count'] = HubPostComment.query.filter_by(
+            post_id=post_id, parent_id=comment.id
+        ).filter(HubPostComment.deleted_at.is_(None)).count()
+        result.append(d)
+
+    return paginated_response(result, total, page, per_page, 'Comments loaded.')
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/comments', methods=['POST'])
+@lu_jwt_required
+def create_comment(account, hub_id, post_id):
+    """Create a comment on a hub post."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
+        HubPost.deleted_at.is_(None)
+    ).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    # Must be a hub member to comment
+    membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if not membership:
+        return error_response('You must be a hub member to comment.', status_code=403)
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return error_response('Comment content is required.')
+    parent_id = data.get('parent_id')  # optional — reply to another comment
+    if parent_id:
+        parent = HubPostComment.query.filter_by(id=parent_id, post_id=post_id).filter(
+            HubPostComment.deleted_at.is_(None)
+        ).first()
+        if not parent:
+            return error_response('Parent comment not found.', status_code=404)
+
+    comment = HubPostComment(
+        id=str(uuid.uuid4()),
+        post_id=post_id,
+        account_id=account.id,
+        parent_id=parent_id,
+        content=content,
+    )
+    db.session.add(comment)
+    # Update comment_count on post
+    post.comment_count = (post.comment_count or 0) + 1
+    db.session.commit()
+
+    # Notify post author (skip self)
+    if post.account_id != account.id:
+        try:
+            from backend.domains.notifications.service import create_notification
+            create_notification(
+                account_id=post.account_id,
+                notif_type='post.commented',
+                title=f'{account.display_name} commented on your post',
+                body=content[:80],
+                data={'post_id': post_id, 'hub_id': hub_id, 'comment_id': comment.id},
+                action_url=f'/hubs/{hub_id}/posts/{post_id}',
+            )
+        except Exception:
+            pass
+
+    return success_response('Comment posted.', comment.to_dict(), status_code=201)
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/comments/<comment_id>', methods=['PUT'])
+@lu_jwt_required
+def edit_comment(account, hub_id, post_id, comment_id):
+    """Edit a comment — author only."""
+    comment = HubPostComment.query.filter_by(id=comment_id, post_id=post_id).filter(
+        HubPostComment.deleted_at.is_(None)
+    ).first()
+    if not comment:
+        return error_response('Comment not found.', status_code=404)
+    if comment.account_id != account.id:
+        return error_response('You can only edit your own comments.', status_code=403)
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return error_response('Comment content is required.')
+    comment.content = content
+    db.session.commit()
+    return success_response('Comment updated.', comment.to_dict())
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>/comments/<comment_id>', methods=['DELETE'])
+@lu_jwt_required
+def delete_comment(account, hub_id, post_id, comment_id):
+    """Soft-delete a comment — author, hub admin, or moderator."""
+    comment = HubPostComment.query.filter_by(id=comment_id, post_id=post_id).filter(
+        HubPostComment.deleted_at.is_(None)
+    ).first()
+    if not comment:
+        return error_response('Comment not found.', status_code=404)
+    membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if comment.account_id != account.id and (not membership or membership.role not in ('admin', 'moderator')):
+        return error_response('You cannot delete this comment.', status_code=403)
+    from datetime import datetime
+    comment.deleted_at = datetime.utcnow()
+    # Decrement post comment_count
+    post = HubPost.query.get(post_id)
+    if post and post.comment_count > 0:
+        post.comment_count -= 1
+    db.session.commit()
+    return success_response('Comment deleted.')
 
 
 @hubs_bp.route('/<hub_id>/posts/<post_id>', methods=['DELETE'])

@@ -37,6 +37,10 @@ class Match(db.Model):
     spark_a_id = db.Column(db.String(36), nullable=True)
     spark_b_id = db.Column(db.String(36), nullable=True)
     thread_id = db.Column(db.String(36), nullable=True)
+    state = db.Column(db.String(20), default='active')  # active | unmatched | expired
+    met_at = db.Column(db.DateTime, nullable=True)
+    unmatched_by = db.Column(db.String(36), nullable=True)
+    unmatched_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     account_a = db.relationship('Account', foreign_keys=[account_a_id], lazy='joined')
@@ -49,6 +53,9 @@ class Match(db.Model):
             'account_a_id': self.account_a_id,
             'account_b_id': self.account_b_id,
             'thread_id': self.thread_id,
+            'state': self.state or 'active',
+            'met_at': self.met_at.isoformat() if self.met_at else None,
+            'unmatched_at': self.unmatched_at.isoformat() if self.unmatched_at else None,
             'other_account': other.to_dict() if other else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

@@ -4,6 +4,7 @@ Mode-protected: account must have sparks enabled.
 """
 from flask import Blueprint, request
 from sqlalchemy import or_
+from backend.models import db
 from backend.domains.sparks.models import Spark, Match
 from backend.domains.sparks.service import get_deck, record_action
 from backend.shared.auth.decorators import sparks_mode_required, lu_jwt_required
@@ -16,9 +17,13 @@ sparks_bp = Blueprint('v1_sparks', __name__, url_prefix='/v1/sparks')
 @sparks_bp.route('/deck', methods=['GET'])
 @sparks_mode_required
 def deck(account):
-    """Get discovery deck."""
+    """
+    Get discovery deck.
+    ?refresh=true — include previously-passed profiles (deck re-discovery).
+    """
     limit = request.args.get('limit', 20, type=int)
-    cards = get_deck(account.id, limit=limit)
+    refresh = request.args.get('refresh', '').lower() == 'true'
+    cards = get_deck(account.id, limit=limit, allow_passed=refresh)
     return success_response('Deck loaded.', cards)
 
 
@@ -83,6 +88,57 @@ def matches(account):
     ).order_by(Match.created_at.desc())
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
     return paginated_response([m.to_dict(account.id) for m in items], total, page, per_page, 'Matches loaded.')
+
+
+@sparks_bp.route('/matches/<match_id>/unmatch', methods=['POST'])
+@sparks_mode_required
+def unmatch(account, match_id):
+    """Unmatch — ends the match and removes from each other's matches list."""
+    match = Match.query.filter(
+        Match.id == match_id,
+        or_(Match.account_a_id == account.id, Match.account_b_id == account.id),
+        Match.state == 'active',
+    ).first()
+    if not match:
+        return error_response('Active match not found.', status_code=404)
+    from datetime import datetime
+    match.state = 'unmatched'
+    match.unmatched_by = account.id
+    match.unmatched_at = datetime.utcnow()
+    db.session.commit()
+    # Notify the other person
+    other_id = match.account_b_id if account.id == match.account_a_id else match.account_a_id
+    try:
+        from backend.domains.notifications.service import create_notification
+        create_notification(
+            account_id=other_id,
+            notif_type='spark.unmatched',
+            title='You have been unmatched',
+            body='This match is no longer active.',
+            data={'match_id': match_id},
+            action_url='/sparks/matches',
+        )
+    except Exception:
+        pass
+    return success_response('Unmatched successfully.')
+
+
+@sparks_bp.route('/matches/<match_id>/met', methods=['POST'])
+@sparks_mode_required
+def mark_met(account, match_id):
+    """Signal that you met this person in real life — ML outcome feedback."""
+    match = Match.query.filter(
+        Match.id == match_id,
+        or_(Match.account_a_id == account.id, Match.account_b_id == account.id),
+        Match.state == 'active',
+    ).first()
+    if not match:
+        return error_response('Active match not found.', status_code=404)
+    from datetime import datetime
+    if not match.met_at:
+        match.met_at = datetime.utcnow()
+        db.session.commit()
+    return success_response('Meeting recorded.', match.to_dict(account.id))
 
 
 @sparks_bp.route('/matches/<match_id>', methods=['GET'])

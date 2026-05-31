@@ -300,6 +300,32 @@ def _run_seed():
             db.session.add(HubPost(id=gen_id(), hub_id=h_id, account_id=a_id,
                                    content=content, like_count=0, comment_count=0, created_at=days_ago(5)))
     db.session.commit()
+
+    # ── Hub post comments (realistic cross-member discussion) ─────────────────
+    from backend.domains.hubs.models import HubPostComment
+    comment_seeds = [
+        ('mak-alumni',              'samuel-ocen',   'aisha-nakayima',    'So proud of this alumni network. ConnectED!'),
+        ('mak-alumni',              'samuel-ocen',   'henry-kiwanuka',    'Agreed — Makerere CS community is strong.'),
+        ('uganda-developers',       'henry-kiwanuka', 'samuel-ocen',      'I tried Rust for a project at Andela — highly recommend for systems work.'),
+        ('uganda-developers',       'henry-kiwanuka', 'david-ochieng',    'Also worth looking at Go for simpler concurrency.'),
+        ('kampala-young-professionals', 'aisha-nakayima', 'irene-nalubega', 'Happy to collaborate on UX research! Let me know.'),
+        ('agtech-east-africa',      'david-ochieng',  'noah-tumusiime',   'Really excited about this. Sharing with my farmer network.'),
+        ('ug-fintech',              'brian-ssemwogerere', 'lawrence-nkurunziza', 'The BOU guidelines are quite conservative compared to Rwanda.'),
+    ]
+    for hub_slug, post_author_handle, commenter_handle, comment_text in comment_seeds:
+        h_id = hub_ids.get(hub_slug)
+        poster_id = account_ids.get(post_author_handle)
+        commenter_id = account_ids.get(commenter_handle)
+        if not (h_id and poster_id and commenter_id):
+            continue
+        post = HubPost.query.filter_by(hub_id=h_id, account_id=poster_id).first()
+        if post and not HubPostComment.query.filter_by(post_id=post.id, account_id=commenter_id).first():
+            db.session.add(HubPostComment(
+                id=gen_id(), post_id=post.id, account_id=commenter_id,
+                content=comment_text, created_at=days_ago(3),
+            ))
+            post.comment_count = (post.comment_count or 0) + 1
+    db.session.commit()
     logger.info('[seed] Hubs done')
 
     # ── Threads + Messages ────────────────────────────────────────────────

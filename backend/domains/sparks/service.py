@@ -9,7 +9,7 @@ from backend.domains.identity.models import Account
 from backend.domains.profile.models import DatingProfile
 
 
-def get_deck(account_id: str, limit: int = 20) -> list:
+def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False) -> list:
     """
     Generate a discovery deck ordered by Interest Graph compatibility.
 
@@ -30,8 +30,18 @@ def get_deck(account_id: str, limit: int = 20) -> list:
     from backend.domains.safety.models import Block, Report
     from backend.shared.scoring.interest_graph import rank_candidates
 
-    # Exclude acted-on + blocked (both directions) + self
-    acted_ids = {s.target_id for s in Spark.query.filter_by(actor_id=account_id).all()}
+    # Determine exclusion set:
+    # allow_passed=True → only exclude spark_up/standout (matches), not pass actions
+    if allow_passed:
+        # Only exclude positive actions — allow re-discovery of passed profiles
+        acted_ids = {
+            s.target_id for s in Spark.query.filter_by(actor_id=account_id).filter(
+                Spark.action.in_(['spark_up', 'standout'])
+            ).all()
+        }
+    else:
+        acted_ids = {s.target_id for s in Spark.query.filter_by(actor_id=account_id).all()}
+
     blocked_ids = (
         {b.blocked_id for b in Block.query.filter_by(blocker_id=account_id).all()} |
         {b.blocker_id for b in Block.query.filter_by(blocked_id=account_id).all()}

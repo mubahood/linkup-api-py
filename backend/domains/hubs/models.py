@@ -101,7 +101,7 @@ class HubPost(db.Model):
 
     author = db.relationship('Account', foreign_keys=[account_id], lazy='joined')
 
-    def to_dict(self):
+    def to_dict(self, my_like=False):
         return {
             'id': self.id,
             'hub_id': self.hub_id,
@@ -110,7 +110,38 @@ class HubPost(db.Model):
             'media': self.media,
             'like_count': self.like_count,
             'comment_count': self.comment_count,
+            'my_like': my_like,
             'author': self.author.to_dict() if self.author else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class HubPostComment(db.Model):
+    __tablename__ = 'lu_hub_post_comments'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    post_id = db.Column(db.String(36), db.ForeignKey('lu_hub_posts.id', ondelete='CASCADE'), nullable=False)
+    account_id = db.Column(db.String(36), db.ForeignKey('lu_accounts.id', ondelete='CASCADE'), nullable=False)
+    parent_id = db.Column(db.String(36), nullable=True)  # for replies (no FK to keep it simple)
+    content = db.Column(db.Text, nullable=False)
+    like_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    author = db.relationship('Account', foreign_keys=[account_id], lazy='joined')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'post_id': self.post_id,
+            'account_id': self.account_id,
+            'parent_id': self.parent_id,
+            'content': self.content if not self.deleted_at else '[Comment deleted]',
+            'like_count': self.like_count,
+            'is_deleted': bool(self.deleted_at),
+            'author': self.author.to_dict() if self.author and not self.deleted_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

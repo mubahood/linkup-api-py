@@ -175,6 +175,76 @@ def logout(account):
     return success_response('Logged out successfully.')
 
 
+@identity_bp.route('/me', methods=['PUT'])
+@lu_jwt_required
+def update_me(account):
+    """Update account settings: display_name, email, modes_enabled."""
+    data = request.get_json(silent=True) or {}
+
+    if 'display_name' in data:
+        dn = (data['display_name'] or '').strip()
+        if len(dn) < 2:
+            return error_response('Display name must be at least 2 characters.')
+        account.display_name = dn
+
+    if 'email' in data:
+        email = (data['email'] or '').strip().lower()
+        if email:
+            # Check uniqueness
+            from backend.domains.identity.models import Account
+            existing = Account.query.filter(
+                Account.email == email,
+                Account.id != account.id,
+                Account.deleted_at.is_(None),
+            ).first()
+            if existing:
+                return error_response('This email is already in use.')
+            account.email = email
+            account.email_verified = 0  # require re-verification
+
+    if 'modes_enabled' in data:
+        modes = data['modes_enabled']
+        if isinstance(modes, dict):
+            # Must keep at least one mode
+            if not modes.get('professional') and not modes.get('sparks'):
+                return error_response('At least one mode (professional or sparks) must remain enabled.')
+            current = account.modes_enabled or {}
+            if isinstance(current, str):
+                import json
+                try:
+                    current = json.loads(current)
+                except Exception:
+                    current = {}
+            current.update(modes)
+            account.modes_enabled = current
+
+    db.session.commit()
+    return success_response('Account updated.', account.to_dict())
+
+
+@identity_bp.route('/password', methods=['POST'])
+@lu_jwt_required
+def change_password(account):
+    """Change account password. Requires current password."""
+    data = request.get_json(silent=True) or {}
+    current_pw = (data.get('current_password') or '').strip()
+    new_pw = (data.get('new_password') or '').strip()
+
+    if not new_pw or len(new_pw) < 8:
+        return error_response('New password must be at least 8 characters.')
+
+    # If account has a password, verify current one
+    if account.password_hash:
+        if not current_pw:
+            return error_response('Current password is required.')
+        if not account.check_password(current_pw):
+            return error_response('Current password is incorrect.')
+
+    account.set_password(new_pw)
+    db.session.commit()
+    return success_response('Password updated successfully.')
+
+
 @identity_bp.route('/device', methods=['POST'])
 @lu_jwt_required
 def register_device(account):

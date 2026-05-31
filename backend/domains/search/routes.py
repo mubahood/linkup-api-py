@@ -19,7 +19,7 @@ def people(account):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     offset = (page - 1) * per_page
-    results = search_people(q, dimension, limit=per_page, offset=offset)
+    results = search_people(q, account_id=account.id, dimension=dimension, limit=per_page, offset=offset)
     return success_response('Search results.', results)
 
 

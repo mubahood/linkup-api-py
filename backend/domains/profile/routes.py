@@ -256,6 +256,21 @@ def delete_experience(account, exp_id):
     return success_response('Experience removed.')
 
 
+# ─── Compatibility ───────────────────────────────────────────
+
+@profile_bp.route('/compatibility/<target_id>', methods=['GET'])
+@lu_jwt_required
+def compatibility(account, target_id):
+    """Return Interest Graph compatibility breakdown with another account."""
+    from backend.shared.scoring.interest_graph import get_compatibility_breakdown
+    mode = request.args.get('mode', 'professional')
+    target = db.session.get(Account, target_id)
+    if not target or target.deleted_at:
+        return error_response('Account not found.', status_code=404)
+    breakdown = get_compatibility_breakdown(account.id, target_id, mode=mode)
+    return success_response('Compatibility loaded.', breakdown)
+
+
 # ─── Account deletion ────────────────────────────────────────
 
 @profile_bp.route('/me', methods=['DELETE'])

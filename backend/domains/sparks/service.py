@@ -10,38 +10,70 @@ from backend.domains.profile.models import DatingProfile
 
 
 def get_deck(account_id: str, limit: int = 20) -> list:
-    """Generate a discovery deck of profiles to swipe on."""
-    # Exclude accounts already acted on and blocked accounts
-    acted_ids = {
-        s.target_id for s in Spark.query.filter_by(actor_id=account_id).all()
-    }
-    acted_ids.add(account_id)
+    """
+    Generate a discovery deck ordered by Interest Graph compatibility.
+    Excludes: already-acted-on, blocked, self.
+    """
+    import json
+    from backend.domains.safety.models import Block
+    from backend.shared.scoring.interest_graph import rank_candidates
 
-    # Get accounts with dating profiles who have sparks mode enabled
+    # Exclude acted-on + blocked (both directions) + self
+    acted_ids = {s.target_id for s in Spark.query.filter_by(actor_id=account_id).all()}
+    blocked_ids = (
+        {b.blocked_id for b in Block.query.filter_by(blocker_id=account_id).all()} |
+        {b.blocker_id for b in Block.query.filter_by(blocked_id=account_id).all()}
+    )
+    excluded = acted_ids | blocked_ids | {account_id}
+
+    # Fetch a wider pool (3× limit) to allow scoring + filtering
+    pool_size = limit * 3
     query = db.session.query(Account).join(
         DatingProfile, DatingProfile.account_id == Account.id
     ).filter(
-        Account.id.notin_(acted_ids) if acted_ids else True,
+        Account.id.notin_(excluded) if excluded else True,
         Account.account_status == 'active',
         Account.deleted_at.is_(None),
-    ).order_by(Account.created_at.desc()).limit(limit)
-
+    ).limit(pool_size)
     accounts = query.all()
-    result = []
+
+    # Filter to sparks-enabled accounts
+    sparks_accounts = []
     for acc in accounts:
-        # Only include accounts with sparks mode enabled
         modes = acc.modes_enabled or {}
         if isinstance(modes, str):
-            import json
             try:
                 modes = json.loads(modes)
             except Exception:
                 modes = {}
-        if not modes.get('sparks', False):
+        if modes.get('sparks', False):
+            sparks_accounts.append(acc)
+
+    if not sparks_accounts:
+        return []
+
+    # Rank by Interest Graph overlap (dating mode)
+    candidate_ids = [acc.id for acc in sparks_accounts]
+    ranked = rank_candidates(account_id, candidate_ids, mode='dating')
+
+    # Build result in ranked order (up to limit)
+    acc_map = {acc.id: acc for acc in sparks_accounts}
+    dating_map = {
+        dp.account_id: dp
+        for dp in DatingProfile.query.filter(
+            DatingProfile.account_id.in_(candidate_ids)
+        ).all()
+    }
+
+    result = []
+    for cid, score in ranked[:limit]:
+        acc = acc_map.get(cid)
+        if not acc:
             continue
-        dating = DatingProfile.query.filter_by(account_id=acc.id).first()
         card = acc.to_dict()
+        dating = dating_map.get(cid)
         card['dating_profile'] = dating.to_dict() if dating else None
+        card['compatibility_score'] = round(score, 3)
         result.append(card)
     return result
 

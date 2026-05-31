@@ -797,6 +797,243 @@ if _d_br and _d_br.get("code") == 1:
             print("  ❌ Hub double-join should have been rejected")
             results["fail"].append(("Hub double-join rejected", "Expected code=0"))
 
+# ── Interest Graph scoring ─────────────────────────────────────────────────
+sec("INTEREST GRAPH SCORING")
+
+# Compatibility with self (should be 1.0)
+test("GET /v1/profile/compatibility/self", "GET", f"/v1/profile/compatibility/{ACCT['id']}",
+     token=TK,
+     check=lambda d: f"score={d.get('total_score')} dims={len(d.get('dimensions',[]))}")
+
+# Compatibility with another member
+d_henry_c, _ = call("GET", "/v1/profile/@henry-kiwanuka", token=TK)
+if d_henry_c and d_henry_c.get("code") == 1:
+    henry_id = d_henry_c["data"]["account"]["id"]
+    test("GET /v1/profile/compatibility/:henry (professional)", "GET",
+         f"/v1/profile/compatibility/{henry_id}?mode=professional",
+         token=TK,
+         check=lambda d: f"score={d.get('total_score')} top_dim={d.get('dimensions',[{}])[0].get('dimension','?')}")
+    test("GET /v1/profile/compatibility/:henry (dating)", "GET",
+         f"/v1/profile/compatibility/{henry_id}?mode=dating",
+         token=TK,
+         check=lambda d: f"score={d.get('total_score')}")
+
+# Deck should show compatibility_score on each card
+deck_scored = test("GET /v1/sparks/deck (scored)", "GET", "/v1/sparks/deck", token=TK,
+     check=lambda d: f"cards={len(d) if isinstance(d,list) else 0} has_score={'compatibility_score' in (d[0] if isinstance(d,list) and d else {})}")
+
+# Links suggestions should also have compatibility_score (data is a plain list here)
+sugg_scored = test("GET /v1/links/suggestions (scored)", "GET", "/v1/links/suggestions", token=TK,
+     check=lambda d: f"suggestions={len(d) if isinstance(d,list) else len(d.get('data',[]))} has_score={'compatibility_score' in (d[0] if isinstance(d,list) and d else d.get('data',[{}])[0] if isinstance(d,dict) else {})}")
+
+# 404 for unknown account
+_bad_compat, _ = call("GET", "/v1/profile/compatibility/nonexistent-uuid", token=TK)
+if _bad_compat and _bad_compat.get("code") == 0:
+    print("  ✅ GET /v1/profile/compatibility/:bad → correct 404")
+    results["pass"].append("Compatibility 404 for unknown account")
+else:
+    print("  ❌ Compatibility should 404 for unknown account")
+    results["fail"].append(("Compatibility 404 for unknown account", "Expected code=0"))
+
+# ── Account settings ───────────────────────────────────────────────────────
+sec("ACCOUNT SETTINGS")
+
+# Update display_name
+test("PUT /v1/auth/me (update name)", "PUT", "/v1/auth/me",
+     body={"display_name": "Samuel Ocen (Audit Test)"},
+     token=TK,
+     check=lambda d: f"name={d.get('display_name','')[:30]}")
+
+# Restore name
+test("PUT /v1/auth/me (restore name)", "PUT", "/v1/auth/me",
+     body={"display_name": "Samuel Ocen"},
+     token=TK,
+     check=lambda d: f"name={d.get('display_name','')}")
+
+# Update modes — enable both
+test("PUT /v1/auth/me (modes both on)", "PUT", "/v1/auth/me",
+     body={"modes_enabled": {"professional": True, "sparks": True}},
+     token=TK,
+     check=lambda d: f"modes={d.get('modes_enabled')}")
+
+# Try to disable all modes — should fail
+_no_modes, _ = call("PUT", "/v1/auth/me", {"modes_enabled": {"professional": False, "sparks": False}}, token=TK)
+if _no_modes and _no_modes.get("code") == 0:
+    print("  ✅ PUT /v1/auth/me (disable all modes) → correctly rejected")
+    results["pass"].append("Disable all modes rejected")
+else:
+    print("  ❌ Should reject disabling all modes")
+    results["fail"].append(("Disable all modes rejected", "Expected code=0"))
+
+# Password change
+test("POST /v1/auth/password (set new)", "POST", "/v1/auth/password",
+     body={"current_password": "linkup2026", "new_password": "Linkup2026!"},
+     token=TK,
+     check=lambda d: f"{'ok' if d is None else d}")
+
+# Restore password
+test("POST /v1/auth/password (restore)", "POST", "/v1/auth/password",
+     body={"current_password": "Linkup2026!", "new_password": "linkup2026"},
+     token=TK)
+
+# Wrong current password
+_wrong_pw, _ = call("POST", "/v1/auth/password",
+                    {"current_password": "wrongpassword", "new_password": "newpass123"}, token=TK)
+if _wrong_pw and _wrong_pw.get("code") == 0:
+    print("  ✅ POST /v1/auth/password (wrong current) → correctly rejected")
+    results["pass"].append("Wrong current password rejected")
+else:
+    print("  ❌ Wrong current password should be rejected")
+    results["fail"].append(("Wrong current password rejected", "Expected code=0"))
+
+# Too-short new password
+_short_pw, _ = call("POST", "/v1/auth/password",
+                    {"current_password": "linkup2026", "new_password": "short"}, token=TK)
+if _short_pw and _short_pw.get("code") == 0:
+    print("  ✅ POST /v1/auth/password (too short) → correctly rejected")
+    results["pass"].append("Too-short password rejected")
+else:
+    print("  ❌ Too-short password should be rejected")
+    results["fail"].append(("Too-short password rejected", "Expected code=0"))
+
+# ── Events extras ──────────────────────────────────────────────────────────
+sec("EVENTS EXTRAS")
+
+# Create an event to test update + attendees + cancel
+ev_new = test("POST /v1/events (for extras)", "POST", "/v1/events",
+     body={"title": "Python UG Meetup Audit Test",
+           "description": "Monthly Python developers meetup in Kampala.",
+           "event_type": "networking", "start_at": "2026-09-15T18:00:00",
+           "end_at": "2026-09-15T21:00:00", "location_text": "Endiro Coffee, Kololo",
+           "is_online": False, "max_attendees": 50},
+     token=TK,
+     check=lambda d: f"id={d.get('id','')[:8]} title={d.get('title','')[:30]}")
+
+if ev_new:
+    ev_id = ev_new["id"]
+
+    # Update it
+    test("PUT /v1/events/:id", "PUT", f"/v1/events/{ev_id}",
+         body={"description": "Updated: Monthly gathering of Kampala Python devs. Networking + talks.",
+               "max_attendees": 75},
+         token=TK,
+         check=lambda d: f"max={d.get('max_attendees')} desc_len={len(d.get('description') or '')}")
+
+    # RSVP to it (so attendees list is non-empty)
+    requests.post(f"{BASE}/v1/events/{ev_id}/rsvp",
+                  json={"status": "going"},
+                  headers={"Authorization": f"Bearer {TK}", "Content-Type": "application/json"})
+
+    # Attendees list
+    test("GET /v1/events/:id/attendees", "GET", f"/v1/events/{ev_id}/attendees",
+         token=TK,
+         check=lambda d: f"total={d.get('total',0)} has_account={'account' in (d.get('data',[{}])[0] if d.get('data') else {})}")
+
+    # Attendees with status filter
+    test("GET /v1/events/:id/attendees?status=going", "GET", f"/v1/events/{ev_id}/attendees?status=going",
+         token=TK,
+         check=lambda d: f"going={d.get('total',0)}")
+
+    # Cancel it (host only)
+    test("DELETE /v1/events/:id (cancel)", "DELETE", f"/v1/events/{ev_id}",
+         token=TK)
+
+    # Verify it's gone
+    _gone, _ = call("GET", f"/v1/events/{ev_id}", token=TK)
+    if _gone and _gone.get("code") == 0:
+        print("  ✅ GET /v1/events/:id (after cancel) → correctly 404")
+        results["pass"].append("Event 404 after cancel")
+    else:
+        print("  ❌ Event should 404 after cancel")
+        results["fail"].append(("Event 404 after cancel", "Expected code=0"))
+
+# Non-host cannot cancel another's event — use another account to create it
+call("POST", "/v1/auth/otp/request", {"phone": "+256700000004", "purpose": "login"})
+_d_chr, _ = call("POST", "/v1/auth/otp/verify",
+                  {"phone": "+256700000004", "code": "123456", "purpose": "login"})
+if _d_chr and _d_chr.get("code") == 1:
+    _chr_tk = _d_chr["data"]["access_token"]
+    _other_ev, _ = call("POST", "/v1/events",
+                         {"title": "Christine's Audit Event", "start_at": "2026-10-01T14:00:00"},
+                         token=_chr_tk)
+    if _other_ev and _other_ev.get("code") == 1:
+        _oid = _other_ev["data"]["id"]
+        _del_other, _ = call("DELETE", f"/v1/events/{_oid}", token=TK)  # Samuel tries to delete
+        if _del_other and _del_other.get("code") == 0:
+            print("  ✅ DELETE /v1/events/:id (non-host) → correctly rejected")
+            results["pass"].append("Event delete non-host rejected")
+        else:
+            print("  ❌ Non-host event delete should be rejected")
+            results["fail"].append(("Event delete non-host rejected", "Expected code=0"))
+        # Clean up: Christine deletes her own event
+        call("DELETE", f"/v1/events/{_oid}", token=_chr_tk)
+
+# ── Jobs extras ────────────────────────────────────────────────────────────
+sec("JOBS EXTRAS")
+
+# Create a test job to update + close + view applicants
+job_new = test("POST /v1/jobs (for extras)", "POST", "/v1/jobs",
+     body={"title": "Lead Machine Learning Engineer",
+           "description": "Build the Interest Graph matching engine for LinkUp's recommendation system.",
+           "employment_type": "full_time", "seniority": "senior",
+           "location_text": "Kampala, Uganda (Remote-friendly)",
+           "salary_min": 5000000, "salary_max": 8000000, "currency": "UGX",
+           "referral_open": True},
+     token=TK,
+     check=lambda d: f"id={d.get('id','')[:8]} open={d.get('is_open')}")
+
+if job_new:
+    jid = job_new["id"]
+
+    # Update it
+    test("PUT /v1/jobs/:id", "PUT", f"/v1/jobs/{jid}",
+         body={"description": "Updated: Build ML systems for Uganda's professional network.",
+               "salary_min": 5500000, "salary_max": 9000000},
+         token=TK,
+         check=lambda d: f"salary_min={d.get('salary_min')} open={d.get('is_open')}")
+
+    # Apply from another account (henry)
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000009", "purpose": "login"})
+    _d_hen, _ = call("POST", "/v1/auth/otp/verify",
+                     {"phone": "+256700000009", "code": "123456", "purpose": "login"})
+    if _d_hen and _d_hen.get("code") == 1:
+        hen_tk = _d_hen["data"]["access_token"]
+        call("POST", f"/v1/jobs/{jid}/apply",
+             {"cover_note": "I have deep ML experience and would love to build the Interest Graph for LinkUp."},
+             token=hen_tk)
+
+    # View applicants (poster)
+    test("GET /v1/jobs/:id/applicants", "GET", f"/v1/jobs/{jid}/applicants",
+         token=TK,
+         check=lambda d: f"total={d.get('total',0)} has_applicant={'applicant' in (d.get('data',[{}])[0] if d.get('data') else {})}")
+
+    # Non-poster cannot view applicants
+    call("POST", "/v1/auth/otp/request", {"phone": "+256700000002", "purpose": "login"})
+    _d_ai, _ = call("POST", "/v1/auth/otp/verify",
+                    {"phone": "+256700000002", "code": "123456", "purpose": "login"})
+    if _d_ai and _d_ai.get("code") == 1:
+        ai_tk = _d_ai["data"]["access_token"]
+        _no_appl, _ = call("GET", f"/v1/jobs/{jid}/applicants", token=ai_tk)
+        if _no_appl and _no_appl.get("code") == 0:
+            print("  ✅ GET /v1/jobs/:id/applicants (non-poster) → correctly rejected")
+            results["pass"].append("Job applicants non-poster rejected")
+
+    # Close the job
+    test("POST /v1/jobs/:id/close", "POST", f"/v1/jobs/{jid}/close",
+         token=TK,
+         check=lambda d: f"open={d.get('is_open')}")
+
+    # Verify closed job is not in open feed
+    feed_check, _ = call("GET", f"/v1/jobs/{jid}", token=TK)
+    if feed_check and feed_check.get("code") == 1:
+        is_open = feed_check["data"].get("is_open", True)
+        if not is_open:
+            print("  ✅ Job correctly marked closed after close endpoint")
+            results["pass"].append("Job marked closed after close")
+        else:
+            print("  ❌ Job should be closed after close endpoint")
+            results["fail"].append(("Job marked closed after close", "is_open should be False"))
+
 # ── Legacy /api/ routes ────────────────────────────────────────────────────
 sec("LEGACY /api/ (backward compat)")
 

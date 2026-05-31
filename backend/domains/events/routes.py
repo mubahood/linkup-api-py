@@ -84,6 +84,80 @@ def get_event(account, event_id):
     return success_response('Event loaded.', _enrich_event(event, account.id))
 
 
+@events_bp.route('/<event_id>', methods=['PUT'])
+@lu_jwt_required
+def update_event(account, event_id):
+    """Update event — host only."""
+    event = Event.query.get(event_id)
+    if not event:
+        return error_response('Event not found.', status_code=404)
+    if event.created_by != account.id:
+        return error_response('Only the event host can update this event.', status_code=403)
+    data = request.get_json(silent=True) or {}
+    for field in ['title', 'description', 'event_type', 'location_text', 'link', 'max_attendees']:
+        if field in data:
+            setattr(event, field, data[field])
+    if 'is_online' in data:
+        event.is_online = int(data['is_online'])
+    if 'start_at' in data:
+        try:
+            event.start_at = datetime.fromisoformat(str(data['start_at']).replace('Z', '+00:00'))
+        except Exception:
+            return error_response('Invalid start_at format.')
+    if 'end_at' in data:
+        try:
+            event.end_at = datetime.fromisoformat(str(data['end_at']).replace('Z', '+00:00'))
+        except Exception:
+            return error_response('Invalid end_at format.')
+    db.session.commit()
+    return success_response('Event updated.', _enrich_event(event, account.id))
+
+
+@events_bp.route('/<event_id>', methods=['DELETE'])
+@lu_jwt_required
+def cancel_event(account, event_id):
+    """Cancel / delete an event — host only."""
+    event = Event.query.get(event_id)
+    if not event:
+        return error_response('Event not found.', status_code=404)
+    if event.created_by != account.id:
+        return error_response('Only the event host can cancel this event.', status_code=403)
+    db.session.delete(event)
+    db.session.commit()
+    return success_response('Event cancelled.')
+
+
+@events_bp.route('/<event_id>/attendees', methods=['GET'])
+@lu_jwt_required
+def attendees(account, event_id):
+    """List attendees with going/maybe/not_going status."""
+    event = Event.query.get(event_id)
+    if not event:
+        return error_response('Event not found.', status_code=404)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    status_filter = request.args.get('status', '')  # going | maybe | not_going | all
+
+    query = EventRSVP.query.filter_by(event_id=event_id)
+    if status_filter and status_filter != 'all':
+        query = query.filter(EventRSVP.status == status_filter)
+    query = query.order_by(EventRSVP.created_at.asc())
+
+    from backend.shared.utils.pagination import paginate_query
+    from backend.shared.utils.response import paginated_response
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+
+    result = []
+    for rsvp in items:
+        from backend.domains.identity.models import Account
+        acc = db.session.get(Account, rsvp.account_id)
+        entry = rsvp.to_dict()
+        entry['account'] = acc.to_dict() if acc else None
+        result.append(entry)
+
+    return paginated_response(result, total, page, per_page, 'Attendees loaded.')
+
+
 @events_bp.route('/<event_id>/rsvp', methods=['POST'])
 @lu_jwt_required
 def rsvp(account, event_id):

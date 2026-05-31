@@ -93,6 +93,65 @@ def get_job(account, job_id):
     return success_response('Job loaded.', _enrich_job(job, account.id))
 
 
+@jobs_bp.route('/<job_id>', methods=['PUT'])
+@lu_jwt_required
+def update_job(account, job_id):
+    """Update a job posting — poster only."""
+    job = Job.query.get(job_id)
+    if not job:
+        return error_response('Job not found.', status_code=404)
+    if job.posted_by != account.id:
+        return error_response('Only the job poster can update this listing.', status_code=403)
+    data = request.get_json(silent=True) or {}
+    for field in ['title', 'description', 'org_name', 'location_text', 'employment_type',
+                  'seniority', 'salary_min', 'salary_max', 'currency', 'skills', 'expires_at']:
+        if field in data:
+            setattr(job, field, data[field])
+    if 'referral_open' in data:
+        job.referral_open = int(data['referral_open'])
+    db.session.commit()
+    return success_response('Job updated.', _enrich_job(job, account.id))
+
+
+@jobs_bp.route('/<job_id>/close', methods=['POST'])
+@lu_jwt_required
+def close_job(account, job_id):
+    """Close a job — poster only. Sets is_open=0."""
+    job = Job.query.get(job_id)
+    if not job:
+        return error_response('Job not found.', status_code=404)
+    if job.posted_by != account.id:
+        return error_response('Only the job poster can close this listing.', status_code=403)
+    job.is_open = 0
+    db.session.commit()
+    return success_response('Job closed.', _enrich_job(job, account.id))
+
+
+@jobs_bp.route('/<job_id>/applicants', methods=['GET'])
+@lu_jwt_required
+def job_applicants(account, job_id):
+    """List applicants for a job — poster only."""
+    job = Job.query.get(job_id)
+    if not job:
+        return error_response('Job not found.', status_code=404)
+    if job.posted_by != account.id:
+        return error_response('Only the job poster can view applicants.', status_code=403)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    query = Application.query.filter_by(job_id=job_id).order_by(Application.created_at.asc())
+    from backend.shared.utils.pagination import paginate_query
+    from backend.shared.utils.response import paginated_response
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    result = []
+    for app in items:
+        from backend.domains.identity.models import Account as Acct
+        applicant = db.session.get(Acct, app.applicant_id)
+        entry = app.to_dict()
+        entry['applicant'] = applicant.to_dict() if applicant else None
+        result.append(entry)
+    return paginated_response(result, total, page, per_page, 'Applicants loaded.')
+
+
 @jobs_bp.route('/<job_id>/apply', methods=['POST'])
 @lu_jwt_required
 def apply_job(account, job_id):

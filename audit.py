@@ -77,12 +77,21 @@ test("GET /v1/auth/me", "GET", "/v1/auth/me", token=TK,
 test("POST /v1/auth/otp/request (for diff phone)", "POST", "/v1/auth/otp/request",
      body={"phone": "+256700000002", "purpose": "login"})
 
-# Register a brand new account
+# Register a brand new account — clean up test account first to keep audit idempotent
+TEST_PHONE = "+256799999998"
+# If account already exists (prior audit run), log in and delete it so register can be re-tested
+call("POST", "/v1/auth/otp/request", {"phone": TEST_PHONE, "purpose": "login"})
+_pre, _ = call("POST", "/v1/auth/otp/verify",
+               {"phone": TEST_PHONE, "code": "123456", "purpose": "login"})
+if _pre and _pre.get("code") == 1:
+    _del_tk = _pre["data"].get("access_token")
+    call("DELETE", "/v1/profile/me", token=_del_tk)  # soft-delete the test account
+
 test("POST /v1/auth/register (new)", "POST", "/v1/auth/register",
-     body={"phone": "+256799999998", "display_name": "Test User Audit"})
-call("POST", "/v1/auth/otp/request", {"phone": "+256799999998", "purpose": "register"})
+     body={"phone": TEST_PHONE, "display_name": "Test User Audit"})
+call("POST", "/v1/auth/otp/request", {"phone": TEST_PHONE, "purpose": "register"})
 test("POST /v1/auth/otp/verify (new account)", "POST", "/v1/auth/otp/verify",
-     body={"phone": "+256799999998", "code": "123456", "purpose": "register"},
+     body={"phone": TEST_PHONE, "code": "123456", "purpose": "register"},
      check=lambda d: f"is_new={d.get('is_new_account')} token={'yes' if d.get('access_token') else 'no'}")
 
 # ── Profile ────────────────────────────────────────────────────────────────
@@ -104,7 +113,7 @@ test("PUT /v1/profile/me (update)", "PUT", "/v1/profile/me",
 test("GET /v1/profile/@samuel-ocen", "GET", "/v1/profile/@samuel-ocen", token=TK,
      check=lambda d: f"name={d.get('account',{}).get('display_name','?')}")
 
-test("GET /v1/profile/@aisha-nakato", "GET", "/v1/profile/@aisha-nakato", token=TK,
+test("GET /v1/profile/@aisha-nakayima", "GET", "/v1/profile/@aisha-nakayima", token=TK,
      check=lambda d: f"headline={d.get('profile',{}).get('headline','none')[:40]}")
 
 # Profile not found
@@ -189,15 +198,22 @@ test("GET /v1/links (my connections)", "GET", "/v1/links", token=TK,
      check=lambda d: f"links={len(d.get('data',[]) if isinstance(d,dict) else d)}")
 
 test("GET /v1/links/requests", "GET", "/v1/links/requests", token=TK,
-     check=lambda d: f"incoming={len(d.get('incoming',[]) if isinstance(d,dict) else [])} outgoing={len(d.get('outgoing',[]) if isinstance(d,dict) else [])}")
+     check=lambda d: f"sent={len(d.get('sent',[]) if isinstance(d,dict) else [])} received={len(d.get('received',[]) if isinstance(d,dict) else [])}")
 
 test("GET /v1/links/suggestions", "GET", "/v1/links/suggestions", token=TK,
      check=lambda d: f"suggestions={len(d.get('data',[]) if isinstance(d,dict) else d)}")
 
-# Send a link request to Christine (not yet connected)
+# Send a link request to Christine — cancel any pending one first to stay idempotent
 d_christine, _ = call("GET", "/v1/profile/@christine-akello", token=TK)
 if d_christine and d_christine.get("code") == 1:
     cid = d_christine["data"]["account"]["id"]
+    # Withdraw any pending request before re-testing
+    _req2, _ = call("GET", "/v1/links/requests", token=TK)
+    if _req2 and _req2.get("code") == 1:
+        for lnk in _req2["data"].get("sent", []):
+            if lnk.get("addressee_id") == cid:
+                call("DELETE", f"/v1/links/{lnk['id']}", token=TK)
+                break
     test("POST /v1/links/request (Christine Akello)", "POST", "/v1/links/request",
          body={"target_id": cid, "note": "Hi Christine, I work in tech and interested in health systems."},
          token=TK)
@@ -224,7 +240,7 @@ if hubs and hubs.get("data"):
     hid = h["id"]
 
     test(f"GET /v1/hubs/{h['name'][:20]}", "GET", f"/v1/hubs/{hid}", token=TK,
-         check=lambda d: f"name={d.get('hub',{}).get('name','?')[:25]} members={d.get('hub',{}).get('member_count',0)}")
+         check=lambda d: f"name={d.get('name','?')[:25]} members={d.get('member_count',0)}")
 
     test(f"GET /v1/hubs/{h['name'][:20]}/posts", "GET", f"/v1/hubs/{hid}/posts", token=TK,
          check=lambda d: f"posts={len(d.get('data',[]))}")

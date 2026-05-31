@@ -256,6 +256,18 @@ def delete_experience(account, exp_id):
     return success_response('Experience removed.')
 
 
+# ─── Account deletion ────────────────────────────────────────
+
+@profile_bp.route('/me', methods=['DELETE'])
+@lu_jwt_required
+def delete_account(account):
+    from datetime import datetime
+    account.deleted_at = datetime.utcnow()
+    account.account_status = 'closed'
+    db.session.commit()
+    return success_response('Account deleted.')
+
+
 # ─── Completion ──────────────────────────────────────────────
 
 @profile_bp.route('/completion', methods=['GET'])

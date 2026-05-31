@@ -38,8 +38,32 @@ def action(account):
         return error_response('You cannot spark yourself.')
 
     spark, match = record_action(account.id, target_id, act)
+
+    # Notify on match
+    if match:
+        try:
+            from backend.domains.notifications.service import create_notification
+            from backend.domains.identity.models import Account
+            actor_acct = Account.query.get(account.id)
+            target_acct = Account.query.get(target_id)
+            if actor_acct and target_acct:
+                for notif_target, other in [
+                    (account.id, target_acct.display_name),
+                    (target_id, actor_acct.display_name),
+                ]:
+                    create_notification(
+                        account_id=notif_target,
+                        notif_type='spark.match',
+                        title=f"You matched with {other}! 🎉",
+                        body="Say hello — don't be shy.",
+                        data={'match_id': match.id},
+                        action_url=f'/sparks/matches/{match.id}',
+                    )
+        except Exception:
+            pass
+
     return success_response(
-        "It's a match!" if match else 'Action recorded.',
+        "It's a match! 🎉" if match else 'Action recorded.',
         {
             'spark': spark.to_dict(),
             'match': match.to_dict(account.id) if match else None,

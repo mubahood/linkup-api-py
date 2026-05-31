@@ -69,10 +69,23 @@ def otp_verify():
     ).first()
 
     if not account:
-        # Use provided name or fall back to phone — member updates during onboarding
-        resolved_name = display_name or f'Member {phone[-4:]}'
-        account = create_account(phone, resolved_name)
-        is_new = True
+        # Check for a soft-deleted account with the same phone — reactivate it
+        deleted = Account.query.filter_by(phone=phone).filter(
+            Account.deleted_at.isnot(None)
+        ).first()
+        if deleted:
+            deleted.deleted_at = None
+            deleted.account_status = 'active'
+            deleted.phone_verified = 1
+            if display_name and display_name != deleted.display_name:
+                deleted.display_name = display_name
+            db.session.commit()
+            account = deleted
+            is_new = True
+        else:
+            resolved_name = display_name or f'Member {phone[-4:]}'
+            account = create_account(phone, resolved_name)
+            is_new = True
     else:
         account.phone_verified = 1
         db.session.commit()

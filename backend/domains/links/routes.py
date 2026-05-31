@@ -83,6 +83,21 @@ def send_request(account):
     )
     db.session.add(link)
     db.session.commit()
+
+    # Notify the target
+    try:
+        from backend.domains.notifications.service import create_notification
+        create_notification(
+            account_id=target_id,
+            notif_type='link.requested',
+            title=f'{account.display_name} wants to Link with you',
+            body=note or 'You have a new Link request.',
+            data={'link_id': link.id, 'requester_id': account.id},
+            action_url=f'/links/requests',
+        )
+    except Exception:
+        pass  # Notifications are non-critical
+
     return success_response('Link request sent.', link.to_dict(account.id), status_code=201)
 
 
@@ -94,6 +109,21 @@ def accept_request(account, link_id):
         return error_response('Link request not found.', status_code=404)
     link.status = 'accepted'
     db.session.commit()
+
+    # Notify the requester that their request was accepted
+    try:
+        from backend.domains.notifications.service import create_notification
+        create_notification(
+            account_id=link.requester_id,
+            notif_type='link.accepted',
+            title=f'{account.display_name} accepted your Link request',
+            body='You are now connected. Start a conversation!',
+            data={'link_id': link.id, 'accepter_id': account.id},
+            action_url=f'/profile/@{account.handle}',
+        )
+    except Exception:
+        pass
+
     return success_response('Link request accepted.', link.to_dict(account.id))
 
 

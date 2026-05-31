@@ -128,6 +128,7 @@ def _run_seed():
 
     # ── Accounts ───────────────────────────────────────────────────────────
     members = [
+        # samuel-ocen is the primary test account and admin for audit tests
         ('samuel-ocen','+256700000001','Samuel Ocen','Software Engineer','Building scalable systems for East Africa.'),
         ('aisha-nakayima','+256700000002','Aisha Nakayima','Product Designer','UX/UI specialist passionate about inclusive design.'),
         ('brian-ssemwogerere','+256700000003','Brian Ssemwogerere','Finance Manager','10+ years in banking across Uganda.'),
@@ -152,18 +153,25 @@ def _run_seed():
 
     account_ids = {}
     pw_hash = bcrypt.hashpw(b'linkup2026', bcrypt.gensalt()).decode()
-    for handle, phone, name, role, bio in members:
+    for idx, (handle, phone, name, role, bio) in enumerate(members):
         a = Account.query.filter_by(phone=phone).first()
         if not a:
             a = Account(id=gen_id(), handle=handle, display_name=name, phone=phone,
                         phone_verified=True, kyc_level=1,
                         modes_enabled=json.dumps({'professional':True,'sparks':True}),
-                        account_status='active', created_at=days_ago(60))
+                        account_status='active',
+                        is_admin=1 if idx == 0 else 0,  # first account (samuel-ocen) is admin
+                        created_at=days_ago(60))
             if hasattr(a, 'password_hash'): a.password_hash = pw_hash
             db.session.add(a); db.session.flush()
             p = ProfessionalProfile(id=gen_id(), account_id=a.id, headline=role, bio=bio,
                                     seniority='mid', current_role=role, location_id=kampala_id)
             db.session.add(p)
+        else:
+            # Ensure first account is always admin even if already exists
+            if idx == 0:
+                a.is_admin = 1
+                db.session.flush()
         account_ids[handle] = Account.query.filter_by(phone=phone).first().id
     db.session.commit()
     logger.info(f'[seed] {len(account_ids)} accounts')

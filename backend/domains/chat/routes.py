@@ -103,6 +103,27 @@ def post_message(account, thread_id):
     if not body:
         return error_response('Message body is required.')
     msg = send_message(thread_id, account.id, body, msg_type)
+
+    # Notify all other participants
+    try:
+        from backend.domains.notifications.service import create_notification
+        other_participants = ThreadParticipant.query.filter(
+            ThreadParticipant.thread_id == thread_id,
+            ThreadParticipant.account_id != account.id,
+        ).all()
+        preview = body[:80] + ('…' if len(body) > 80 else '')
+        for p in other_participants:
+            create_notification(
+                account_id=p.account_id,
+                notif_type='message.sent',
+                title=f'New message from {account.display_name}',
+                body=preview,
+                data={'thread_id': thread_id, 'sender_id': account.id},
+                action_url=f'/chat/{thread_id}',
+            )
+    except Exception:
+        pass
+
     return success_response('Message sent.', msg.to_dict(), status_code=201)
 
 

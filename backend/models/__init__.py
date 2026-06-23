@@ -10,7 +10,6 @@ from backend.models.user_wallet import UserWallet
 from backend.models.chat_head import ChatHead
 from backend.models.chat_message import ChatMessage
 from backend.models.call_log import CallLog
-from backend.models.driver_rating import DriverRating
 
 # LinkUp domain models (lu_ tables)
 from backend.domains.reference.models import Location, Institution, Org
@@ -25,3 +24,8 @@ from backend.domains.jobs.models import Job, Application, SavedJob
 from backend.domains.events.models import Event, EventRSVP
 from backend.domains.notifications.models import Notification
 from backend.domains.safety.models import Report, Block
+from backend.domains.wallet.models import WalletAccount, WalletTransaction, PasswordReset
+from backend.domains.jobs.referral_models import JobReferral
+from backend.domains.posts.models import Post, PostLike, PostComment, PostCommentLike, PostSave, PollVote
+from backend.shared.idempotency import IdempotencyKey
+from backend.shared.events.models import BehavioralEvent

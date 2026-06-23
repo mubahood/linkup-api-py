@@ -68,3 +68,62 @@ def mark_all_read(account):
     )
     db.session.commit()
     return success_response('All notifications marked as read.')
+
+
+# ─── Notification Preferences ────────────────────────────────────────────────
+
+# All supported notification types with their default enabled states
+_DEFAULT_PREFS = {
+    'message.sent':              True,
+    'link.requested':            True,
+    'link.accepted':             True,
+    'spark.match':               True,
+    'spark.unmatched':           True,
+    'post.liked':                True,
+    'post.commented':            True,
+    'endorsement.received':      True,
+    'job.referral_requested':    True,
+    'job.referral_responded':    True,
+    'mentorship.requested':      True,
+    'mentorship.accepted':       True,
+    'mentorship.declined':       True,
+    'safety.panic':              True,
+    'safety.date_scheduled':     True,
+    'admin.account_suspended':   True,
+    'admin.account_active':      True,
+}
+
+
+@notifications_bp.route('/preferences', methods=['GET'])
+@lu_jwt_required
+def get_preferences(account):
+    """Get notification preferences — merged with defaults so all types are always shown."""
+    stored = account.notif_prefs  # safe accessor (T-API-041)
+    merged = {**_DEFAULT_PREFS, **stored}
+    return success_response('Notification preferences loaded.', merged)
+
+
+@notifications_bp.route('/preferences', methods=['PUT'])
+@lu_jwt_required
+def update_preferences(account):
+    """
+    Update notification preferences.
+    Body: { "message.sent": false, "post.liked": true, ... }
+    Only known notification types are accepted; unknown keys are ignored.
+    """
+    data = request.get_json(silent=True) or {}
+    current = account.notif_prefs  # safe accessor (T-API-041)
+    updated = {**current}
+    changed = []
+    for key, val in data.items():
+        if key in _DEFAULT_PREFS:
+            updated[key] = bool(val)
+            changed.append(key)
+    if not changed:
+        return error_response(
+            f'No valid preference keys found. Valid types: {", ".join(sorted(_DEFAULT_PREFS.keys()))}'
+        )
+    account.notification_prefs = updated
+    db.session.commit()
+    merged = {**_DEFAULT_PREFS, **updated}
+    return success_response(f'Preferences updated ({len(changed)} key(s) changed).', merged)

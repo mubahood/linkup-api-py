@@ -27,15 +27,16 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const { data } = await authAPI.login({ email, password });
+  const login = useCallback(async (identifier, password) => {
+    const { data } = await authAPI.login({ email: identifier, password });
     if (data.code === 1) {
-      const payload = data.data || {};
-      const userData = normalizeUserPayload(payload);
-      const token = payload.token || payload.remember_token;
+      const payload   = data.data || {};
+      // v1 uses access_token; legacy used token / remember_token
+      const token     = payload.access_token || payload.token || payload.remember_token;
+      const userData  = normalizeUserPayload(payload);
 
       if (!token || !userData) {
-        throw new Error('Login response is missing user session data');
+        throw new Error('Login response is missing session data. Contact support.');
       }
 
       localStorage.setItem('admin_token', token);

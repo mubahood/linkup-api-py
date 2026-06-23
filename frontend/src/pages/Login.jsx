@@ -1,107 +1,160 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { FiArrowRight, FiEye, FiEyeOff, FiLock, FiLogIn, FiMail, FiShield } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiLock, FiLogIn, FiPhone, FiMail, FiUser, FiShield } from 'react-icons/fi';
+
+function detectType(value) {
+  const v = value.trim();
+  if (!v) return null;
+  if (/^\+?\d{7,15}$/.test(v))                     return 'phone';
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))        return 'email';
+  if (/^[a-z0-9_-]{2,}$/i.test(v))                 return 'handle';
+  return null;
+}
 
 export default function Login() {
   const { login } = useAuth();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const navigate  = useNavigate();
+
+  const [identifier,    setIdentifier]    = useState('');
+  const [password,      setPassword]      = useState('');
+  const [showPassword,  setShowPassword]  = useState(false);
+  const [error,         setError]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+
+  const idType = useMemo(() => detectType(identifier), [identifier]);
+
+  const IdIcon = idType === 'phone' ? FiPhone
+               : idType === 'email' ? FiMail
+               : FiUser;
+
+  const placeholder = 'Phone, email, or @handle';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!identifier.trim()) { setError('Please enter your phone, email, or handle.'); return; }
+    if (!password)           { setError('Please enter your password.'); return; }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(identifier.trim(), password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Login failed');
+      setError(err.response?.data?.message || err.message || 'Login failed. Check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="login-kicker">
-            <FiShield />
-            <span>Secure admin access</span>
-          </div>
-          <div className="login-logo">
-            <span className="logo-mark">NR</span>
-            <h1>NegoRide Canada</h1>
-          </div>
-          <p className="login-subtitle">Admin Dashboard</p>
-          <p className="login-description">
-            Review users, bookings, negotiations, payouts, and platform activity from one control room.
-          </p>
-        </div>
+    <div className="lu-login-page">
+      {/* Background pattern */}
+      <div className="lu-login-bg" aria-hidden="true" />
 
-        {error && <div className="alert alert-error">{error}</div>}
+      <div className="lu-login-card">
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <div className="input-wrapper">
-              <span className="input-icon-slot">
-                <FiMail className="input-icon" />
-              </span>
-              <input
-                id="email"
-                type="email"
-                placeholder="admin@negoride.ca"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
+        {/* Header */}
+        <div className="lu-login-header">
+          <div className="lu-login-brand">
+            <div className="lu-logo-mark">LU</div>
+            <div>
+              <h1 className="lu-login-title">LinkUp</h1>
+              <p className="lu-login-subtitle">Admin Console</p>
             </div>
           </div>
 
-          <div className="form-group">
+          <div className="lu-login-badge">
+            <FiShield size={11} />
+            <span>Secure · Admin only</span>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="lu-alert lu-alert-error" role="alert">
+            <span>⚠</span> {error}
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="lu-login-form" noValidate>
+
+          {/* Identifier */}
+          <div className="lu-form-group">
+            <label htmlFor="identifier">Sign in with</label>
+            <div className="lu-input-wrap">
+              <span className="lu-input-icon">
+                <IdIcon size={15} />
+              </span>
+              <input
+                id="identifier"
+                type="text"
+                inputMode="text"
+                autoComplete="username"
+                placeholder={placeholder}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                autoFocus
+                spellCheck={false}
+                autoCapitalize="none"
+              />
+              {idType && (
+                <span className={`lu-id-badge lu-id-badge--${idType}`}>
+                  {idType}
+                </span>
+              )}
+            </div>
+            <p className="lu-field-hint">Accepts phone (+256…), email, or @handle</p>
+          </div>
+
+          {/* Password */}
+          <div className="lu-form-group">
             <label htmlFor="password">Password</label>
-            <div className="input-wrapper input-wrapper--with-action">
-              <span className="input-icon-slot">
-                <FiLock className="input-icon" />
+            <div className="lu-input-wrap lu-input-wrap--action">
+              <span className="lu-input-icon">
+                <FiLock size={15} />
               </span>
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
               />
               <button
                 type="button"
-                className="input-action"
-                onClick={() => setShowPassword((value) => !value)}
+                className="lu-input-toggle"
+                onClick={() => setShowPassword(v => !v)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <FiEyeOff /> : <FiEye />}
+                {showPassword ? <FiEyeOff size={15} /> : <FiEye size={15} />}
               </button>
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
-            {loading ? <span className="spinner" /> : <FiLogIn />}
-            {loading ? 'Signing in…' : 'Sign In'}
+          {/* Submit */}
+          <button
+            type="submit"
+            className="lu-btn-primary"
+            disabled={loading}
+          >
+            {loading
+              ? <span className="lu-spinner" />
+              : <FiLogIn size={16} />
+            }
+            {loading ? 'Signing in…' : 'Sign In to Admin'}
           </button>
-
-          <div className="login-helper">
-            <span>Super admin</span>
-            <span className="login-helper-divider" />
-            <span>Protected session</span>
-            <FiArrowRight />
-          </div>
         </form>
+
+        {/* Footer hint */}
+        <div className="lu-login-footer">
+          <span>samuel-ocen</span>
+          <span className="lu-dot" />
+          <span>+256700000001</span>
+          <span className="lu-dot" />
+          <span>111111</span>
+        </div>
       </div>
     </div>
   );

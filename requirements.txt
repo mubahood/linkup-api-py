@@ -12,3 +12,4 @@ gunicorn==22.0.0
 python-dotenv==1.0.1
 flask-socketio==5.3.7
 eventlet==0.37.0
+Faker==40.23.0

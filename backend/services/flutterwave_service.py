@@ -87,13 +87,22 @@ class FlutterwaveService:
 
     # ── Webhook verification ──────────────────────────────────────────────────
 
-    def verify_webhook_signature(self, payload_bytes: bytes, signature: str) -> bool:
-        """Verify Flutterwave webhook using HMAC-SHA256 with FLW_SECRET_HASH.
+    def verify_webhook_hash(self, received_hash: str) -> bool:
+        """Verify a Flutterwave v3 webhook.
 
-        Flutterwave sends the hash in the 'verificationhash' header.
+        FLW v3 sends a STATIC header `verif-hash` equal to the dashboard
+        "Secret hash" (our FLW_SECRET_HASH). We compare for equality in
+        constant time. (This is the correct v3 mechanism — not an HMAC of the
+        body.)
         """
         if not self._secret_hash:
-            # No hash configured — skip verification (dev mode)
+            return False  # fail closed: never accept unverified webhooks in prod
+        return hmac.compare_digest(self._secret_hash, str(received_hash or ''))
+
+    def verify_webhook_signature(self, payload_bytes: bytes, signature: str) -> bool:
+        """Deprecated HMAC variant (kept for backward-compat). Prefer
+        `verify_webhook_hash`."""
+        if not self._secret_hash:
             return True
         computed = hmac.new(
             self._secret_hash.encode('utf-8'),
@@ -296,6 +305,92 @@ class FlutterwaveService:
             'currency': tx_data.get('currency', self._currency),
             'flw_response': data,
         }
+
+    # Uganda mobile-money network → Flutterwave Transfers `account_bank` code.
+    # NOTE: confirm these against your Flutterwave dashboard / `/v3/transfers/banks`
+    # before going live; they are centralised here so they're trivial to correct.
+    UG_NETWORK_CODES = {'MTN': 'MTN', 'AIRTEL': 'AIRTEL'}
+
+    def initiate_mobile_money_payout_ug(
+        self,
+        phone: str,
+        network: str,
+        amount: float,
+        beneficiary_name: str,
+        narration: str,
+        reference: str = None,
+    ) -> dict:
+        """Pay out to a Ugandan mobile-money number via Flutterwave Transfers.
+
+        Args:
+            phone: subscriber number (any format; normalised to 256…)
+            network: 'MTN' or 'AIRTEL'
+            amount: UGX
+        Returns dict with flw_transfer_id, reference, status.
+        """
+        net = (network or '').upper().strip()
+        account_bank = self.UG_NETWORK_CODES.get(net)
+        if not account_bank:
+            raise FlutterwaveError(f'Unsupported mobile-money network: {network}')
+        if not reference:
+            reference = f'linkup-payout-{uuid.uuid4().hex[:16]}'
+
+        payload = {
+            'account_bank': account_bank,
+            'account_number': self.normalize_phone_ug(phone),
+            'amount': float(amount),
+            'currency': 'UGX',
+            'narration': (narration or 'LinkUp withdrawal')[:100],
+            'reference': reference,
+            'beneficiary_name': beneficiary_name or 'LinkUp Member',
+            'meta': {'mobile_number': self.normalize_phone_ug(phone)},
+            'callback_url': f'{self._app_url}/v1/wallet/webhook/flutterwave',
+        }
+        data = self._post('/transfers', payload)
+        if data.get('status') != 'success':
+            raise FlutterwaveError(
+                f"Transfer failed: {data.get('message', 'Unknown error')}")
+        tx = data.get('data', {})
+        return {
+            'flw_transfer_id': str(tx.get('id', '')),
+            'reference': tx.get('reference', reference),
+            'status': tx.get('status', 'NEW'),
+            'amount': float(tx.get('amount', amount)),
+            'currency': tx.get('currency', 'UGX'),
+            'flw_response': data,
+        }
+
+    @staticmethod
+    def normalize_phone_ug(phone: str) -> str:
+        """Normalise a Ugandan number to `2567XXXXXXXX` (no +)."""
+        if not phone:
+            return ''
+        digits = ''.join(c for c in str(phone) if c.isdigit())
+        if digits.startswith('256') and len(digits) == 12:
+            return digits
+        if digits.startswith('0') and len(digits) == 10:
+            return f'256{digits[1:]}'
+        if len(digits) == 9:  # 7XXXXXXXX
+            return f'256{digits}'
+        return digits
+
+    # Ugandan mobile-money prefixes by network (first two digits of the 9-digit
+    # local number, i.e. the digits after the 256 country code).
+    UG_MTN_PREFIXES = {'76', '77', '78', '39'}      # 076/077/078/039
+    UG_AIRTEL_PREFIXES = {'70', '74', '75', '20'}   # 070/074/075/020
+
+    @classmethod
+    def detect_network_ug(cls, phone: str):
+        """Return 'MTN' | 'AIRTEL' | None inferred from a Ugandan number's prefix."""
+        n = cls.normalize_phone_ug(phone)
+        if not n.startswith('256') or len(n) != 12:
+            return None
+        two = n[3:5]  # first two digits of the 9-digit local part
+        if two in cls.UG_MTN_PREFIXES:
+            return 'MTN'
+        if two in cls.UG_AIRTEL_PREFIXES:
+            return 'AIRTEL'
+        return None
 
     def get_transfer_status(self, transfer_id: str) -> dict:
         """Check the current status of an initiated transfer."""

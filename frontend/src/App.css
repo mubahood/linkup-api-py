@@ -1,21 +1,20 @@
-/* NegoRide Canada Admin - Design System
-   Bold / Modern / Square - per GUIDELINES_DESIGN.md */
+/* LinkUp Admin Console - Design System */
 
 :root {
-  --primary: #040404;
-  --accent: #EF9B11;
-  --accent-hover: #d88a0e;
-  --accent-light: rgba(239,155,17,.10);
+  --primary: #1E1040;
+  --accent: #7C3AED;
+  --accent-hover: #5B21B6;
+  --accent-light: rgba(124,58,237,.10);
   --bg: #FFFFFF;
-  --bg-secondary: #F7F7F7;
-  --bg-tertiary: #F2F2F2;
-  --bg-sidebar: #040404;
+  --bg-secondary: #F8F7FF;
+  --bg-tertiary: #F0EEFF;
+  --bg-sidebar: #18103A;
   --bg-card: #FFFFFF;
-  --text: #040404;
-  --text-secondary: #666666;
-  --text-tertiary: #999999;
+  --text: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
   --text-on-dark: #FFFFFF;
-  --text-on-accent: #040404;
+  --text-on-accent: #FFFFFF;
   --success: #4CAF50;
   --error: #F44336;
   --warning: #FF9800;
@@ -230,7 +229,7 @@ a:hover { color: var(--accent-hover); }
 
 .spinner {
   width: 16px; height: 16px;
-  border: 2px solid rgba(4,4,4,.2); border-top-color: var(--text);
+  border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
   border-radius: 50%; animation: spin .6s linear infinite;
 }
 .login-helper {
@@ -263,12 +262,14 @@ a:hover { color: var(--accent-hover); }
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .brand-mark {
-  width: 34px; height: 34px;
-  background: var(--accent);
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%);
+  border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-on-accent);
-  font-size: 15px; font-weight: 800;
+  color: #fff;
+  font-size: 13px; font-weight: 800; letter-spacing: -.5px;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(124,58,237,.4);
 }
 .brand-info { display: flex; flex-direction: column; }
 .brand-text {
@@ -302,8 +303,8 @@ a:hover { color: var(--accent-hover); }
 }
 .nav-link:hover { color: rgba(255,255,255,.85); background: rgba(255,255,255,.04); }
 .nav-link--active {
-  color: var(--accent); background: rgba(239,155,17,.08);
-  border-left-color: var(--accent);
+  color: #C4B5FD; background: rgba(124,58,237,.15);
+  border-left-color: #A855F7; font-weight: 600;
 }
 .nav-icon { font-size: 17px; flex-shrink: 0; }
 
@@ -620,3 +621,187 @@ a:hover { color: var(--accent-hover); }
 
 /* ── Unassigned warning ── */
 .unassigned { color: var(--warning); font-style: italic; font-size: 12px; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   LINKUP ADMIN LOGIN  — violet / purple design language
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.lu-login-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: #F5F3FF;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.lu-login-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(124,58,237,.08) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(168,85,247,.07) 0%, transparent 70%),
+    repeating-linear-gradient(135deg, transparent, transparent 59px, rgba(124,58,237,.03) 59px, rgba(124,58,237,.03) 60px);
+}
+
+.lu-login-card {
+  position: relative;
+  width: 100%; max-width: 400px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  box-shadow: 0 4px 6px rgba(0,0,0,.04), 0 20px 40px rgba(124,58,237,.10);
+  border: 1px solid rgba(124,58,237,.12);
+}
+
+/* Header */
+.lu-login-header { text-align: center; margin-bottom: 28px; }
+
+.lu-login-brand {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-bottom: 14px;
+}
+
+.lu-logo-mark {
+  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 800; color: #fff; letter-spacing: -1px;
+  box-shadow: 0 4px 12px rgba(124,58,237,.35);
+}
+
+.lu-login-title {
+  font-size: 22px; font-weight: 800; color: #0F172A;
+  margin: 0; letter-spacing: -.4px; line-height: 1.1;
+}
+
+.lu-login-subtitle {
+  font-size: 11px; font-weight: 700; color: #7C3AED;
+  letter-spacing: 1px; text-transform: uppercase; margin: 2px 0 0;
+}
+
+.lu-login-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(124,58,237,.06); border: 1px solid rgba(124,58,237,.15);
+  font-size: 11px; font-weight: 600; color: #5B21B6;
+}
+
+/* Alert */
+.lu-alert {
+  padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
+  font-size: 13px; display: flex; align-items: flex-start; gap: 8px;
+  line-height: 1.4;
+}
+.lu-alert-error {
+  background: rgba(239,68,68,.06); color: #DC2626;
+  border: 1px solid rgba(239,68,68,.2);
+}
+
+/* Form */
+.lu-login-form { display: flex; flex-direction: column; gap: 16px; }
+
+.lu-form-group { display: flex; flex-direction: column; gap: 5px; }
+
+.lu-form-group label {
+  font-size: 12px; font-weight: 600; color: #475569; letter-spacing: .1px;
+}
+
+.lu-input-wrap {
+  position: relative; display: flex; align-items: center;
+}
+
+.lu-input-icon {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  color: #94A3B8; pointer-events: none; z-index: 1;
+  display: flex; align-items: center;
+}
+
+.lu-input-wrap input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px 0 38px;
+  font-size: 14px; color: #0F172A;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  font-family: inherit;
+}
+.lu-input-wrap input:focus {
+  border-color: #7C3AED;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(124,58,237,.10);
+}
+.lu-input-wrap input::placeholder { color: #CBD5E1; }
+.lu-input-wrap--action input { padding-right: 44px; }
+
+.lu-input-toggle {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: #94A3B8; display: flex; align-items: center;
+  padding: 4px;
+  transition: color .15s;
+}
+.lu-input-toggle:hover { color: #7C3AED; }
+
+/* Identifier type badge */
+.lu-id-badge {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  padding: 2px 7px; border-radius: 999px;
+  text-transform: uppercase; pointer-events: none;
+}
+.lu-id-badge--phone  { background: rgba(16,185,129,.10); color: #059669; border: 1px solid rgba(16,185,129,.2); }
+.lu-id-badge--email  { background: rgba(59,130,246,.10); color: #2563EB; border: 1px solid rgba(59,130,246,.2); }
+.lu-id-badge--handle { background: rgba(124,58,237,.10); color: #7C3AED; border: 1px solid rgba(124,58,237,.2); }
+
+.lu-field-hint {
+  font-size: 11px; color: #94A3B8; margin: 0;
+}
+
+/* Submit button */
+.lu-btn-primary {
+  height: 48px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%);
+  color: #fff; border: none; border-radius: 11px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 4px 14px rgba(124,58,237,.3);
+  font-family: inherit; margin-top: 4px;
+}
+.lu-btn-primary:hover:not(:disabled) {
+  opacity: .92;
+  box-shadow: 0 6px 20px rgba(124,58,237,.4);
+  transform: translateY(-1px);
+}
+.lu-btn-primary:active:not(:disabled) { transform: translateY(0); opacity: 1; }
+.lu-btn-primary:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+/* Spinner */
+.lu-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Footer hint */
+.lu-login-footer {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; margin-top: 20px; flex-wrap: wrap;
+  font-size: 11px; color: #94A3B8; font-weight: 500;
+}
+.lu-dot {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: #CBD5E1; flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .lu-login-card { padding: 28px 20px 22px; border-radius: 16px; }
+  .lu-login-title { font-size: 20px; }
+  .lu-logo-mark { width: 40px; height: 40px; font-size: 15px; }
+}

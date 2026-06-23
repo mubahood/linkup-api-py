@@ -153,15 +153,16 @@ def _run_seed():
     ]
 
     account_ids = {}
-    pw_hash = bcrypt.hashpw(b'linkup2026', bcrypt.gensalt()).decode()
+    pw_hash = bcrypt.hashpw(b'111111', bcrypt.gensalt()).decode()
     for idx, (handle, phone, name, role, bio) in enumerate(members):
         a = Account.query.filter_by(phone=phone).first()
         if not a:
             a = Account(id=gen_id(), handle=handle, display_name=name, phone=phone,
                         phone_verified=True, kyc_level=1,
-                        modes_enabled=json.dumps({'professional':True,'sparks':True}),
+                        modes_enabled={'professional': True, 'sparks': True},
                         account_status='active',
                         is_admin=1 if idx == 0 else 0,  # first account (samuel-ocen) is admin
+                        is_premium=1 if idx == 0 else 0,  # samuel-ocen is premium
                         created_at=days_ago(60))
             if hasattr(a, 'password_hash'): a.password_hash = pw_hash
             db.session.add(a); db.session.flush()
@@ -169,9 +170,10 @@ def _run_seed():
                                     seniority='mid', current_role=role, location_id=kampala_id)
             db.session.add(p)
         else:
-            # Ensure first account is always admin even if already exists
+            # Ensure first account is always admin and premium even if already exists
             if idx == 0:
                 a.is_admin = 1
+                a.is_premium = 1
                 db.session.flush()
         account_ids[handle] = Account.query.filter_by(phone=phone).first().id
     db.session.commit()
@@ -353,27 +355,15 @@ def _run_seed():
     db.session.commit()
     logger.info('[seed] Threads done')
 
-    # ── Jobs ──────────────────────────────────────────────────────────────
-    poster = account_ids['samuel-ocen']
-    for title, org_id, desc, emp_type, seniority, loc_id, referral in [
-        ('Senior Flutter Developer',andela_id,'Build mobile solutions for African markets.','full_time','senior',kampala_id,True),
-        ('Data Analyst',nita_id,'Analyse government data to improve public services.','full_time','mid',kampala_id,False),
-        ('Product Designer',jumia_id,'Design e-commerce experiences for East Africa.','contract','mid',kampala_id,False),
-        ('Finance Officer',stanbic_id,'Retail banking financial operations and reporting.','full_time','entry',kampala_id,False),
-        ('AgTech Business Analyst',None,'Bridge technology and smallholder farmers in Eastern Uganda.','full_time','mid',mbale_id,True),
-        ('Telecoms Network Engineer',mtn_id,'Maintain and expand MTN Uganda 4G/5G infrastructure.','full_time','mid',kampala_id,False),
-        ('Junior Frontend Developer',None,'React/TypeScript for consumer-facing web apps.','full_time','entry',kampala_id,False),
-        ('Climate Programme Officer',None,'Climate resilience programmes for rural communities.','contract','mid',mbarara_id,True),
-        ('Marketing Manager',airtel_id,'Lead brand campaigns for Airtel Uganda consumer products.','full_time','senior',kampala_id,False),
-        ('HR Business Partner',None,'People strategy for a 200-person tech firm.','full_time','senior',kampala_id,False),
-    ]:
-        if not Job.query.filter_by(title=title).first():
-            db.session.add(Job(id=gen_id(), org_id=org_id, posted_by=poster, title=title,
-                               description=desc, location_id=loc_id,
-                               employment_type=emp_type, seniority=seniority,
-                               skills=json.dumps([]), is_open=True, referral_open=referral,
-                               created_at=days_ago(7), expires_at=now()+timedelta(days=30)))
-    db.session.commit()
+    # ── Jobs (50 rich entries via seed_jobs.py) ───────────────────────────
+    from backend.seed_jobs import seed_jobs
+    location_ids = {
+        'kampala': kampala_id,
+        'mbarara': mbarara_id,
+        'gulu':    gulu_id,
+        'mbale':   mbale_id,
+    }
+    seed_jobs(account_ids, location_ids)
     logger.info('[seed] Jobs done')
 
     # ── Events ────────────────────────────────────────────────────────────
@@ -473,7 +463,7 @@ def _run_seed():
     db.session.commit()
     logger.info('[seed] Spark actions + match seed done')
 
-    logger.info('[seed] ✓ Complete! Test with: +256700000001 / OTP: 123456')
+    logger.info('[seed] ✓ Complete! Admin: +256700000001 / 111111')
 
 
 if __name__ == '__main__':

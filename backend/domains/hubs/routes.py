@@ -21,17 +21,32 @@ def _enrich_hub(hub: Hub, account_id: str) -> dict:
 @hubs_bp.route('', methods=['GET'])
 @lu_jwt_required
 def list_hubs(account):
-    """List hubs: public + my joined."""
+    """
+    List hubs: public + my joined.
+    Filters: ?type=professional|social, ?q=text, ?institution_id=UUID, ?mine=true
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     filter_type = request.args.get('type', '')
     q = request.args.get('q', '')
+    institution_id = request.args.get('institution_id', '')
+    mine = request.args.get('mine', '').lower() == 'true'
 
-    query = Hub.query.filter_by(is_public=1)
+    if mine:
+        # Only hubs I'm a member of
+        my_hub_ids = [r[0] for r in db.session.query(HubMembership.hub_id).filter_by(
+            account_id=account.id
+        ).all()]
+        query = Hub.query.filter(Hub.id.in_(my_hub_ids)) if my_hub_ids else Hub.query.filter_by(id=None)
+    else:
+        query = Hub.query.filter_by(is_public=1)
+
     if filter_type:
         query = query.filter(Hub.type == filter_type)
     if q:
         query = query.filter(Hub.name.ilike(f'%{q}%'))
+    if institution_id:
+        query = query.filter(Hub.institution_id == institution_id)
     query = query.order_by(Hub.member_count.desc())
 
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
@@ -101,6 +116,22 @@ def update_hub(account, hub_id):
     return success_response('Hub updated.', _enrich_hub(hub, account.id))
 
 
+@hubs_bp.route('/mine', methods=['GET'])
+@lu_jwt_required
+def my_hubs(account):
+    """Hubs I am a member of (convenience alias for ?mine=true)."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    my_hub_ids = [r[0] for r in db.session.query(HubMembership.hub_id).filter_by(
+        account_id=account.id
+    ).all()]
+    if not my_hub_ids:
+        return paginated_response([], 0, page, per_page, 'My hubs loaded.')
+    query = Hub.query.filter(Hub.id.in_(my_hub_ids)).order_by(Hub.member_count.desc())
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+    return paginated_response([_enrich_hub(h, account.id) for h in items], total, page, per_page, 'My hubs loaded.')
+
+
 @hubs_bp.route('/<hub_id>/join', methods=['POST'])
 @lu_jwt_required
 def join_hub(account, hub_id):
@@ -145,19 +176,144 @@ def hub_members(account, hub_id):
     per_page = request.args.get('per_page', 20, type=int)
     query = HubMembership.query.filter_by(hub_id=hub_id).order_by(HubMembership.joined_at.desc())
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
-    return paginated_response([m.to_dict() for m in items], total, page, per_page, 'Members loaded.')
+
+    # Attach headline from ProfessionalProfile for each member
+    from backend.domains.profile.models import ProfessionalProfile
+    account_ids = [m.account_id for m in items]
+    profiles = {
+        p.account_id: p
+        for p in ProfessionalProfile.query.filter(
+            ProfessionalProfile.account_id.in_(account_ids)
+        ).all()
+    } if account_ids else {}
+
+    result = []
+    for m in items:
+        d = m.to_dict()
+        prof = profiles.get(m.account_id)
+        if d.get('account') and prof:
+            d['account']['headline'] = prof.headline or ''
+        result.append(d)
+
+    return paginated_response(result, total, page, per_page, 'Members loaded.')
+
+
+@hubs_bp.route('/<hub_id>/invite', methods=['POST'])
+@lu_jwt_required
+def invite_to_hub(account, hub_id):
+    """
+    Invite a LinkUp member to a hub (admin/moderator only for private hubs;
+    any member can invite to public hubs).
+    Body: { account_id: "<uuid>" }
+    """
+    hub = Hub.query.get(hub_id)
+    if not hub:
+        return error_response('Hub not found.', status_code=404)
+
+    my_membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if not my_membership:
+        return error_response('You must be a member to invite others.', status_code=403)
+    if not hub.is_public and my_membership.role not in ('admin', 'moderator'):
+        return error_response('Only admins and moderators can invite to private hubs.', status_code=403)
+
+    data = request.get_json(silent=True) or {}
+    invitee_id = (data.get('account_id') or '').strip()
+    if not invitee_id:
+        return error_response('account_id is required.')
+    if invitee_id == account.id:
+        return error_response('You cannot invite yourself.')
+
+    from backend.domains.identity.models import Account as Acct
+    invitee = db.session.get(Acct, invitee_id)
+    if not invitee or invitee.deleted_at:
+        return error_response('Account not found.', status_code=404)
+
+    existing = HubMembership.query.filter_by(hub_id=hub_id, account_id=invitee_id).first()
+    if existing:
+        return error_response('This person is already a member of this hub.')
+
+    # Notify the invitee
+    try:
+        from backend.domains.notifications.service import create_notification
+        create_notification(
+            account_id=invitee_id,
+            notif_type='hub.invited',
+            title=f'{account.display_name} invited you to {hub.name}',
+            body=hub.description[:80] if hub.description else f'Join {hub.name} on LinkUp!',
+            data={'hub_id': hub_id, 'inviter_id': account.id},
+            action_url=f'/hubs/{hub_id}',
+        )
+    except Exception:
+        pass
+
+    return success_response(
+        f'Invitation sent to {invitee.display_name}.',
+        {'hub_id': hub_id, 'invited_account_id': invitee_id, 'invited_name': invitee.display_name},
+    )
 
 
 @hubs_bp.route('/<hub_id>/posts', methods=['GET'])
 @lu_jwt_required
 def hub_posts(account, hub_id):
-    page = request.args.get('page', 1, type=int)
+    page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
     query = HubPost.query.filter_by(hub_id=hub_id).filter(
         HubPost.deleted_at.is_(None)
     ).order_by(HubPost.created_at.desc())
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
-    return paginated_response([p.to_dict() for p in items], total, page, per_page, 'Posts loaded.')
+
+    # Batch-fetch my likes for the returned posts in one query
+    post_ids = [p.id for p in items]
+    liked_ids = {
+        like.post_id
+        for like in HubPostLike.query.filter(
+            HubPostLike.post_id.in_(post_ids),
+            HubPostLike.account_id == account.id,
+        ).all()
+    } if post_ids else set()
+
+    result = []
+    for p in items:
+        d = p.to_dict(my_like=(p.id in liked_ids))
+        # Attach author headline from ProfessionalProfile
+        try:
+            from backend.domains.profile.models import ProfessionalProfile
+            prof = ProfessionalProfile.query.filter_by(account_id=p.account_id).first()
+            if d.get('author') and prof:
+                d['author']['headline'] = prof.headline or ''
+        except Exception:
+            pass
+        result.append(d)
+
+    return paginated_response(result, total, page, per_page, 'Posts loaded.')
+
+
+@hubs_bp.route('/<hub_id>/posts/<post_id>', methods=['GET'])
+@lu_jwt_required
+def get_post(account, hub_id, post_id):
+    """Single post detail — includes like status, comment count, and first page of comments."""
+    post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
+        HubPost.deleted_at.is_(None)
+    ).first()
+    if not post:
+        return error_response('Post not found.', status_code=404)
+    my_like = HubPostLike.query.filter_by(post_id=post_id, account_id=account.id).first()
+    data = post.to_dict(my_like=bool(my_like))
+    # Inline first page of comments for convenience
+    top_comments = HubPostComment.query.filter_by(post_id=post_id, parent_id=None).filter(
+        HubPostComment.deleted_at.is_(None)
+    ).order_by(HubPostComment.created_at.asc()).limit(5).all()
+    data['comments'] = []
+    for c in top_comments:
+        cd = c.to_dict()
+        replies = HubPostComment.query.filter_by(post_id=post_id, parent_id=c.id).filter(
+            HubPostComment.deleted_at.is_(None)
+        ).limit(3).all()
+        cd['replies'] = [r.to_dict() for r in replies]
+        data['comments'].append(cd)
+    data['comment_count'] = post.comment_count
+    data['has_more_comments'] = post.comment_count > 5
+    return success_response('Post loaded.', data)
 
 
 @hubs_bp.route('/<hub_id>/posts', methods=['POST'])
@@ -404,3 +560,81 @@ def delete_post(account, hub_id, post_id):
     post.deleted_at = datetime.utcnow()
     db.session.commit()
     return success_response('Post deleted.')
+
+
+# ── Admin: delete hub ─────────────────────────────────────────────────────────
+
+@hubs_bp.route('/<hub_id>', methods=['DELETE'])
+@lu_jwt_required
+def delete_hub(account, hub_id):
+    """Permanently delete a hub — creator or admin member only."""
+    hub = db.session.get(Hub, hub_id)
+    if not hub:
+        return error_response('Hub not found.', status_code=404)
+    membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if hub.created_by != account.id and (not membership or membership.role != 'admin'):
+        return error_response('Only the hub creator or an admin can delete this hub.', status_code=403)
+    db.session.delete(hub)
+    db.session.commit()
+    return success_response('Hub deleted.')
+
+
+# ── Admin: change member role ─────────────────────────────────────────────────
+
+@hubs_bp.route('/<hub_id>/members/<member_account_id>/role', methods=['PUT'])
+@lu_jwt_required
+def change_member_role(account, hub_id, member_account_id):
+    """
+    PUT /v1/hubs/<hub_id>/members/<account_id>/role
+    Body: { role: member | moderator | admin }
+    Admin only.
+    """
+    my_membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if not my_membership or my_membership.role != 'admin':
+        return error_response('Only hub admins can change member roles.', status_code=403)
+
+    target = HubMembership.query.filter_by(hub_id=hub_id, account_id=member_account_id).first()
+    if not target:
+        return error_response('Member not found in this hub.', status_code=404)
+    if member_account_id == account.id:
+        return error_response('You cannot change your own role.')
+
+    data = request.get_json(silent=True) or {}
+    new_role = (data.get('role') or '').strip()
+    if new_role not in ('member', 'moderator', 'admin'):
+        return error_response('role must be: member, moderator, or admin')
+
+    target.role = new_role
+    db.session.commit()
+    return success_response('Member role updated.', target.to_dict())
+
+
+# ── Admin: remove (kick) a member ────────────────────────────────────────────
+
+@hubs_bp.route('/<hub_id>/members/<member_account_id>', methods=['DELETE'])
+@lu_jwt_required
+def remove_member(account, hub_id, member_account_id):
+    """
+    DELETE /v1/hubs/<hub_id>/members/<account_id>
+    Admin or moderator can remove members (mods cannot remove admins).
+    """
+    my_membership = HubMembership.query.filter_by(hub_id=hub_id, account_id=account.id).first()
+    if not my_membership or my_membership.role not in ('admin', 'moderator'):
+        return error_response('Only hub admins and moderators can remove members.', status_code=403)
+    if member_account_id == account.id:
+        return error_response('Use /leave to remove yourself from a hub.')
+
+    target = HubMembership.query.filter_by(hub_id=hub_id, account_id=member_account_id).first()
+    if not target:
+        return error_response('Member not found in this hub.', status_code=404)
+
+    # Moderators cannot kick admins
+    if my_membership.role == 'moderator' and target.role == 'admin':
+        return error_response('Moderators cannot remove admins.', status_code=403)
+
+    hub = db.session.get(Hub, hub_id)
+    db.session.delete(target)
+    if hub and hub.member_count > 0:
+        hub.member_count -= 1
+    db.session.commit()
+    return success_response('Member removed from hub.')

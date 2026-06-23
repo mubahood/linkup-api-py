@@ -24,8 +24,12 @@ api.interceptors.response.use(
 );
 
 /* ── Auth ── */
+// Separate instance for v1 routes (no /api prefix)
+const v1 = axios.create({ baseURL: '/v1', headers: { 'Content-Type': 'application/json' } });
+
 export const authAPI = {
-  login: (data) => api.post('/users/login', data),
+  // POST /v1/admin/login — accepts phone, email, or handle + password
+  login: ({ email, password }) => v1.post('/admin/login', { identifier: email, password }),
   me: () => api.get('/me'),
 };
 

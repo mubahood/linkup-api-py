@@ -8,7 +8,8 @@ load_dotenv()
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'linkup-default-secret-key-2026')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'linkup-default-jwt-key-2026')
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 315360000)))
+    # 30 years (≈946,080,000s) — effectively non-expiring sessions for now.
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 946080000)))
 
     # MySQL via MAMP socket (Unix) or TCP/IP (Windows/TCP)
     DB_USER = os.getenv('DB_USERNAME', 'root')
@@ -40,9 +41,18 @@ class Config:
     FLW_ENCRYPTION_KEY = os.getenv('FLW_ENCRYPTION_KEY', '')
     FLW_SECRET_HASH = os.getenv('FLW_SECRET_HASH', '')
     FLW_BASE_URL = os.getenv('FLW_BASE_URL', 'https://api.flutterwave.com')
-    FLW_CURRENCY = os.getenv('FLW_CURRENCY', 'NGN')
-    FLW_PAYMENT_OPTIONS = os.getenv('FLW_PAYMENT_OPTIONS', 'card,banktransfer,ussd')
-    FLW_TIMEOUT = int(os.getenv('FLW_TIMEOUT', 30))
+    FLW_CURRENCY = os.getenv('FLW_CURRENCY', 'UGX')
+    FLW_PAYMENT_OPTIONS = os.getenv(
+        'FLW_PAYMENT_OPTIONS', 'mobilemoneyuganda,card,banktransfer,ussd')
+    FLW_TIMEOUT = int(os.getenv('FLW_TIMEOUT', 20))
+
+    # ── Wallet / coins / gifting economy (UGX) ────────────────────────────────
+    COIN_RATE_UGX = int(os.getenv('COIN_RATE_UGX', 50))      # 1 coin = UGX 50
+    GIFT_PLATFORM_FEE_PCT = int(os.getenv('GIFT_PLATFORM_FEE_PCT', 10))  # recipient keeps 90%
+    MIN_TOPUP_UGX = int(os.getenv('MIN_TOPUP_UGX', 500))
+    MIN_WITHDRAW_UGX = int(os.getenv('MIN_WITHDRAW_UGX', 1000))
+    WITHDRAW_FEE_UGX = int(os.getenv('WITHDRAW_FEE_UGX', 500))
+    WITHDRAW_AUTO_LIMIT_UGX = int(os.getenv('WITHDRAW_AUTO_LIMIT_UGX', 100000))  # auto below, manual at/above
 
     # Service fee
     SERVICE_FEE_PERCENTAGE = int(os.getenv('SERVICE_FEE_PERCENTAGE', 10))

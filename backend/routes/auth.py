@@ -107,12 +107,10 @@ def register():
         phone_number=phone_number,
         user_type='Customer',
         status='1',
-        country_name=data.get('country_name', 'Nigeria'),
-        country_code=data.get('country_code', '+234'),
-        country_short_name=data.get('country_short_name', 'NG'),
+        country_name=data.get('country_name', 'Uganda'),
+        country_code=data.get('country_code', '+256'),
+        country_short_name=data.get('country_short_name', 'UG'),
         sex=data.get('gender', ''),
-        max_passengers=4,
-        rating=0.00,
     )
     user.set_password(password)
 

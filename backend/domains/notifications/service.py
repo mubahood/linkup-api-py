@@ -11,9 +11,26 @@ from backend.domains.notifications.models import Notification
 logger = logging.getLogger(__name__)
 
 
+def _is_notif_enabled(account_id: str, notif_type: str) -> bool:
+    """Check if the account has this notification type enabled (defaults to True if unset)."""
+    try:
+        from backend.domains.identity.models import Account
+        acct = db.session.get(Account, account_id)
+        prefs = acct.notif_prefs if acct else {}  # safe accessor (T-API-041)
+        if notif_type in prefs:
+            return bool(prefs[notif_type])
+    except Exception:
+        pass
+    return True  # default: all notifications on
+
+
 def create_notification(account_id: str, notif_type: str, title: str, body: str = None,
                         data: dict = None, action_url: str = None) -> Notification:
     """Create an in-app notification record and fire a push if the account has a device token."""
+    # Respect the account's notification preferences
+    if not _is_notif_enabled(account_id, notif_type):
+        return None
+
     notif = Notification(
         id=str(uuid.uuid4()),
         account_id=account_id,
@@ -25,6 +42,13 @@ def create_notification(account_id: str, notif_type: str, title: str, body: str 
     )
     db.session.add(notif)
     db.session.commit()
+
+    # Live in-app push to the recipient's personal channel (T-API-048)
+    try:
+        from backend.sockets.realtime import emit_notification
+        emit_notification(account_id, notif.to_dict())
+    except Exception:
+        pass
 
     # Fire OneSignal push in background thread (non-blocking) if device tokens exist
     try:

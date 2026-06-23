@@ -9,15 +9,20 @@ import {
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
 const BADGE = {
-  active:   { bg: '#e8f5e9', color: '#388e3c', label: 'Active' },
-  inactive: { bg: '#ffebee', color: '#d32f2f', label: 'Inactive' },
-  Yes:      { bg: '#e8f5e9', color: '#388e3c', label: 'Yes' },
-  No:       { bg: '#f5f5f5', color: '#999',    label: 'No'  },
-  Driver:           { bg: '#e3f2fd', color: '#1565c0', label: 'Driver' },
-  'Pending Driver': { bg: '#fff3e0', color: '#e65100', label: 'Pending' },
-  Customer:         { bg: '#f3e5f5', color: '#6a1b9a', label: 'Customer' },
-  Admin:            { bg: '#fce4ec', color: '#880e4f', label: 'Admin' },
-  'Super Admin':    { bg: '#fce4ec', color: '#880e4f', label: 'Super Admin' },
+  // status strings
+  active:    { bg: '#ecfdf5', color: '#059669', label: 'Active' },
+  '1':       { bg: '#ecfdf5', color: '#059669', label: 'Active' },
+  inactive:  { bg: '#fef2f2', color: '#DC2626', label: 'Inactive' },
+  suspended: { bg: '#fef2f2', color: '#DC2626', label: 'Suspended' },
+  '0':       { bg: '#fef2f2', color: '#DC2626', label: 'Inactive' },
+  // role strings
+  Member:        { bg: '#EDE9FE', color: '#5B21B6', label: 'Member' },
+  Premium:       { bg: '#FEF3C7', color: '#B45309', label: 'Premium' },
+  Admin:         { bg: '#FCE7F3', color: '#9D174D', label: 'Admin' },
+  // legacy
+  Driver:        { bg: '#DBEAFE', color: '#1E40AF', label: 'Driver' },
+  'Pending Driver': { bg: '#FFF7ED', color: '#C2410C', label: 'Pending' },
+  Customer:      { bg: '#EDE9FE', color: '#5B21B6', label: 'Member' },
 };
 
 function Badge({ val, label }) {
@@ -34,12 +39,22 @@ function Badge({ val, label }) {
 }
 
 function Avatar({ name, avatar }) {
-  if (avatar) return <img src={avatar} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />;
+  const [imgFailed, setImgFailed] = React.useState(false);
   const init = (name || '?')[0].toUpperCase();
+  if (avatar && !imgFailed) {
+    return (
+      <img
+        src={avatar} alt={name || ''}
+        onError={() => setImgFailed(true)}
+        style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    );
+  }
   return (
     <div style={{
-      width: 32, height: 32, borderRadius: '50%', background: '#EF9B11',
-      color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      width: 34, height: 34, borderRadius: '50%',
+      background: 'linear-gradient(135deg,#7C3AED,#A855F7)',
+      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 700, fontSize: 13, flexShrink: 0,
     }}>{init}</div>
   );
@@ -860,6 +875,13 @@ function EditDrawer({ user, onClose, onSave }) {
   );
 }
 
+const TH = { padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#64748b', whiteSpace: 'nowrap' };
+
+function shortId(id) {
+  if (!id) return '—';
+  return id.replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
 /* ─── Main UsersPage ───────────────────────────────────────────────────── */
 export default function UsersPage() {
   const [users, setUsers]       = useState([]);
@@ -942,11 +964,10 @@ export default function UsersPage() {
   };
 
   const userTypeFilters = [
-    { val: '',               label: 'All Users' },
-    { val: 'Customer',       label: 'Customers' },
-    { val: 'Pending Driver', label: 'Pending Drivers' },
-    { val: 'Driver',         label: 'Drivers' },
-    { val: 'Admin',          label: 'Admins' },
+    { val: '',        label: 'All Members' },
+    { val: 'Member',  label: 'Members' },
+    { val: 'Premium', label: 'Premium' },
+    { val: 'Admin',   label: 'Admins' },
   ];
 
   return (
@@ -975,17 +996,17 @@ export default function UsersPage() {
               className="btn btn-xs"
               onClick={() => handleFilterType(val)}
               style={{
-                borderColor: filterType === val ? '#EF9B11' : '#ccc',
-                background: filterType === val ? '#EF9B11' : '#fff',
-                color: filterType === val ? '#040404' : '#666',
-                fontWeight: filterType === val ? 700 : 500,
+                borderColor: filterType === val ? '#7C3AED' : '#e2e8f0',
+                background:  filterType === val ? '#7C3AED' : '#fff',
+                color:       filterType === val ? '#fff'    : '#64748b',
+                fontWeight:  filterType === val ? 700 : 500,
               }}
             >
               {label}
             </button>
           ))}
         </div>
-        <span style={{ color: '#999', fontSize: 13, whiteSpace: 'nowrap' }}>{total.toLocaleString()} users</span>
+        <span style={{ color: '#64748b', fontSize: 13, whiteSpace: 'nowrap', fontWeight: 600 }}>{total.toLocaleString()} members</span>
       </div>
 
       {/* content */}
@@ -1001,12 +1022,12 @@ export default function UsersPage() {
           <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
               <tr style={{ borderBottom: '2px solid #040404' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>User</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>Contact</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>Role</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>Status</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>Services</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, color: '#666', whiteSpace: 'nowrap' }}>Actions</th>
+                <th style={TH}>Member</th>
+                <th style={TH}>Contact</th>
+                <th style={TH}>Role</th>
+                <th style={TH}>Status</th>
+                <th style={TH}>Modes & KYC</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1017,24 +1038,27 @@ export default function UsersPage() {
                     onMouseEnter={(e) => e.currentTarget.style.background = '#fafafa'}
                     onMouseLeave={(e) => e.currentTarget.style.background = ''}
                   >
-                    {/* user */}
+                    {/* member */}
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Avatar name={u.name || u.first_name} avatar={u.avatar} />
+                        <Avatar name={u.name} avatar={u.avatar} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                            {u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || <span style={{ color: '#bbb' }}>No name</span>}
+                          <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160, color: '#0f172a' }}>
+                            {u.name || <span style={{ color: '#bbb' }}>No name</span>}
                           </div>
-                          <div style={{ fontSize: 11, color: '#999' }}>#{u.id}</div>
+                          <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>
+                            #{shortId(u.id)}
+                            {u.username ? <span style={{ marginLeft: 4, color: '#a78bfa' }}>@{u.username}</span> : null}
+                          </div>
                         </div>
                       </div>
                     </td>
                     {/* contact */}
                     <td style={{ padding: '10px 12px' }}>
-                      <div style={{ fontSize: 12, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                      <div style={{ fontSize: 12, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
                         {u.email || <span style={{ color: '#bbb' }}>No email</span>}
                       </div>
-                      <div style={{ fontSize: 11, color: '#999' }}>{u.phone_number || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.phone_number || '—'}</div>
                     </td>
                     {/* role */}
                     <td style={{ padding: '10px 12px' }}>
@@ -1042,14 +1066,15 @@ export default function UsersPage() {
                     </td>
                     {/* status */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Badge val={u.status} />
+                      <Badge val={String(u.status)} />
                     </td>
-                    {/* services */}
+                    {/* modes & kyc */}
                     <td style={{ padding: '10px 12px' }}>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {u.is_car === 'Yes' && <Badge val={u.is_car_approved === 'Yes' ? 'Yes' : 'No'} label={u.is_car_approved === 'Yes' ? '🚗 Approved' : '🚗 Pending'} />}
-                        {u.is_delivery === 'Yes' && <Badge val={u.is_delivery_approved === 'Yes' ? 'Yes' : 'No'} label={u.is_delivery_approved === 'Yes' ? '📦 Approved' : '📦 Pending'} />}
-                        {u.is_car !== 'Yes' && u.is_delivery !== 'Yes' && u.user_type !== 'Driver' && u.user_type !== 'Pending Driver' && <span style={{ color: '#bbb', fontSize: 12 }}>—</span>}
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {u.modes_enabled?.professional && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#EDE9FE', color: '#5B21B6', fontWeight: 700 }}>PRO</span>}
+                        {u.modes_enabled?.sparks       && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#FCE7F3', color: '#9D174D', fontWeight: 700 }}>SPARKS</span>}
+                        {u.kyc_level >= 2              && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#ECFDF5', color: '#059669', fontWeight: 700 }}>KYC L{u.kyc_level}</span>}
+                        {!u.modes_enabled?.professional && !u.modes_enabled?.sparks && <span style={{ color: '#bbb', fontSize: 12 }}>—</span>}
                       </div>
                     </td>
                     {/* actions */}
@@ -1058,49 +1083,21 @@ export default function UsersPage() {
                         {/* edit */}
                         <button
                           className="btn btn-xs"
-                          title="Edit user"
+                          title="Edit member"
                           onClick={() => setEditing(u)}
-                          style={{ borderColor: '#040404' }}
+                          style={{ borderColor: '#7C3AED', color: '#7C3AED' }}
                         >
                           <FiEdit2 size={12} />
                         </button>
 
-                        {/* review driver application — prominent button for Pending Drivers */}
-                        {u.user_type === 'Pending Driver' && (
-                          <button
-                            className="btn btn-xs"
-                            title="Review Driver Application"
-                            disabled={busy}
-                            onClick={() => setDriverReview(u)}
-                            style={{
-                              borderColor: '#EF9B11', background: '#EF9B11', color: '#000',
-                              fontWeight: 700, fontSize: 11, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4,
-                            }}
-                          >
-                            <FiFileText size={12} /> Review
-                          </button>
-                        )}
-
-                        {/* for already-approved drivers: quick revoke button */}
-                        {u.user_type === 'Driver' && (
-                          <button
-                            className="btn btn-xs"
-                            title="View Driver Application"
-                            onClick={() => setDriverReview(u)}
-                            style={{ borderColor: '#4caf50', color: '#388e3c' }}
-                          >
-                            <FiFileText size={12} />
-                          </button>
-                        )}
-
-                        {/* toggle active */}
+                        {/* toggle active/suspend */}
                         <button
-                          className={`btn btn-xs ${u.status === 'active' ? 'btn-warning' : 'btn-success'}`}
-                          title={u.status === 'active' ? 'Deactivate' : 'Activate'}
+                          className={`btn btn-xs ${String(u.status) === '1' ? 'btn-warning' : 'btn-success'}`}
+                          title={String(u.status) === '1' ? 'Suspend' : 'Activate'}
                           disabled={busy}
-                          onClick={() => tryAction(u.id, 'toggle', `${u.status === 'active' ? 'Deactivate' : 'Activate'} ${u.name || 'this user'}?`)}
+                          onClick={() => tryAction(u.id, 'toggle', `${String(u.status) === '1' ? 'Suspend' : 'Activate'} ${u.name || 'this member'}?`)}
                         >
-                          {u.status === 'active' ? <FiToggleRight size={14} /> : <FiToggleLeft size={14} />}
+                          {String(u.status) === '1' ? <FiToggleRight size={14} /> : <FiToggleLeft size={14} />}
                         </button>
 
                         {/* delete */}
@@ -1121,7 +1118,7 @@ export default function UsersPage() {
                 <tr>
                   <td colSpan="6" style={{ padding: 40, textAlign: 'center', color: '#bbb' }}>
                     <FiUser size={32} style={{ display: 'block', margin: '0 auto 8px' }} />
-                    No users found
+                    No members found
                   </td>
                 </tr>
               )}
@@ -1132,22 +1129,49 @@ export default function UsersPage() {
 
       {/* pagination */}
       {totalPages > 1 && (
-        <div className="pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 0', fontSize: 13 }}>
-          <button
-            className="btn btn-sm btn-secondary"
-            disabled={page <= 1}
-            onClick={() => { const p = page - 1; setPage(p); load(p, search, filterType); }}
-          >
-            <FiChevronLeft size={15} />
-          </button>
-          <span style={{ color: '#666' }}>Page <strong>{page}</strong> of {totalPages}</span>
-          <button
-            className="btn btn-sm btn-secondary"
-            disabled={page >= totalPages}
-            onClick={() => { const p = page + 1; setPage(p); load(p, search, filterType); }}
-          >
-            <FiChevronRight size={15} />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 4px', fontSize: 13, borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 8 }}>
+          <span style={{ color: '#64748b' }}>
+            Showing <strong>{(page - 1) * perPage + 1}–{Math.min(page * perPage, total)}</strong> of <strong>{total.toLocaleString()}</strong> members
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button className="btn btn-xs btn-secondary" disabled={page <= 1}
+              onClick={() => { setPage(1); load(1, search, filterType); }}>
+              «
+            </button>
+            <button className="btn btn-xs btn-secondary" disabled={page <= 1}
+              onClick={() => { const p = page - 1; setPage(p); load(p, search, filterType); }}>
+              <FiChevronLeft size={13} />
+            </button>
+            {/* page number pills — show window around current */}
+            {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+              let p;
+              if (totalPages <= 7) p = i + 1;
+              else if (page <= 4) p = i + 1;
+              else if (page >= totalPages - 3) p = totalPages - 6 + i;
+              else p = page - 3 + i;
+              return (
+                <button key={p} className="btn btn-xs"
+                  onClick={() => { setPage(p); load(p, search, filterType); }}
+                  style={{
+                    minWidth: 30,
+                    borderColor: p === page ? '#7C3AED' : '#e2e8f0',
+                    background:  p === page ? '#7C3AED' : '#fff',
+                    color:       p === page ? '#fff'    : '#64748b',
+                    fontWeight:  p === page ? 700 : 400,
+                  }}>
+                  {p}
+                </button>
+              );
+            })}
+            <button className="btn btn-xs btn-secondary" disabled={page >= totalPages}
+              onClick={() => { const p = page + 1; setPage(p); load(p, search, filterType); }}>
+              <FiChevronRight size={13} />
+            </button>
+            <button className="btn btn-xs btn-secondary" disabled={page >= totalPages}
+              onClick={() => { setPage(totalPages); load(totalPages, search, filterType); }}>
+              »
+            </button>
+          </div>
         </div>
       )}
 

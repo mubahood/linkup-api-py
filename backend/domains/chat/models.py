@@ -43,6 +43,8 @@ class ThreadParticipant(db.Model):
     account_id = db.Column(db.String(36), db.ForeignKey('lu_accounts.id', ondelete='CASCADE'), nullable=False)
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_read_at = db.Column(db.DateTime, nullable=True)
+    is_archived = db.Column(db.SmallInteger, default=0)
+    cleared_at = db.Column(db.DateTime, nullable=True)
 
     account = db.relationship('Account', foreign_keys=[account_id], lazy='joined')
 
@@ -54,6 +56,7 @@ class ThreadParticipant(db.Model):
             'account': self.account.to_dict() if self.account else None,
             'joined_at': self.joined_at.isoformat() if self.joined_at else None,
             'last_read_at': self.last_read_at.isoformat() if self.last_read_at else None,
+            'is_archived': bool(self.is_archived),
         }
 
 
@@ -79,6 +82,18 @@ class MessageReaction(db.Model):
         }
 
 
+def _grouped_reactions(message_id: str) -> list:
+    """Return emoji reactions grouped by emoji with counts. Called inside to_dict."""
+    from sqlalchemy import func
+    rows = (
+        db.session.query(MessageReaction.emoji, func.count(MessageReaction.id))
+        .filter_by(message_id=message_id)
+        .group_by(MessageReaction.emoji)
+        .all()
+    )
+    return [{'emoji': emoji, 'count': count} for emoji, count in rows]
+
+
 class Message(db.Model):
     __tablename__ = 'lu_messages'
 
@@ -94,15 +109,34 @@ class Message(db.Model):
 
     sender = db.relationship('Account', foreign_keys=[sender_id], lazy='joined')
 
-    def to_dict(self):
+    def to_dict(self, viewer_id: str = None, recipient_read_at=None):
+        """
+        recipient_read_at: the other participant's last_read_at datetime.
+        A message is considered read when the recipient's last_read_at >= this
+        message's created_at, meaning they fetched (and therefore saw) it.
+        """
+        reactions = _grouped_reactions(self.id)
+        is_mine = (self.sender_id == viewer_id) if viewer_id else None
+        # Only my own messages can be "read by the other side"
+        is_read = bool(
+            is_mine
+            and recipient_read_at is not None
+            and self.created_at is not None
+            and self.created_at <= recipient_read_at
+        )
         return {
             'id': self.id,
             'thread_id': self.thread_id,
             'sender_id': self.sender_id,
-            'body': self.body,
+            'is_mine': is_mine,
+            'is_read': is_read,
+            'body': self.body or '',
             'type': self.type,
             'media': self.media,
             'status': self.status,
+            'reactions': reactions,
             'sender': self.sender.to_dict() if self.sender else None,
+            # `sent_at` is the Flutter-facing alias; `created_at` kept for compat
+            'sent_at': self.created_at.isoformat() if self.created_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

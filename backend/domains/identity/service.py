@@ -1,5 +1,6 @@
 """
 Identity service: OTP logic, JWT creation, account creation.
+Supports email-primary auth (identifier = email address or phone number).
 """
 import hashlib
 import logging
@@ -16,8 +17,7 @@ from backend.domains.identity.models import Account, OtpRequest, RefreshToken
 
 logger = logging.getLogger(__name__)
 
-# Dev test OTP — always works in development
-DEV_OTP = '123456'
+DEV_OTP = '111111'
 OTP_EXPIRY_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
 
@@ -26,8 +26,8 @@ def _hash_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 
-def generate_handle(display_name: str, phone: str) -> str:
-    """Generate a unique handle from display name."""
+def generate_handle(display_name: str, identifier: str = '') -> str:
+    """Generate a unique @handle from the display name."""
     base = re.sub(r'[^a-z0-9]', '', display_name.lower())
     if len(base) < 3:
         base = 'user'
@@ -40,20 +40,22 @@ def generate_handle(display_name: str, phone: str) -> str:
     return handle
 
 
-def create_otp(phone: str, purpose: str = 'login') -> str:
-    """Create and store an OTP for the given phone number. Returns the OTP code."""
-    # Invalidate previous OTPs for this phone/purpose
-    OtpRequest.query.filter_by(phone=phone, purpose=purpose).filter(
+def create_otp(identifier: str, purpose: str = 'login') -> str:
+    """
+    Create and store an OTP keyed on identifier (email or phone).
+    Returns the OTP code.
+    """
+    # Invalidate previous unused OTPs for this identifier+purpose
+    OtpRequest.query.filter_by(phone=identifier, purpose=purpose).filter(
         OtpRequest.verified_at.is_(None)
     ).delete()
 
-    # In dev mode, use fixed OTP
     code = DEV_OTP
-    logger.warning(f'[OTP] DEV MODE — using fixed OTP {DEV_OTP} for phone {phone}')
+    logger.warning(f'[OTP] DEV MODE — {code} for {identifier} (purpose={purpose})')
 
     otp = OtpRequest(
         id=str(uuid.uuid4()),
-        phone=phone,
+        phone=identifier,   # column stores email or phone
         code_hash=_hash_code(code),
         purpose=purpose,
         expires_at=datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES),
@@ -63,13 +65,10 @@ def create_otp(phone: str, purpose: str = 'login') -> str:
     return code
 
 
-def verify_otp(phone: str, code: str, purpose: str = 'login') -> tuple[bool, str]:
-    """
-    Verify an OTP code.
-    Returns (success: bool, message: str)
-    """
+def verify_otp(identifier: str, code: str, purpose: str = 'login') -> tuple[bool, str]:
+    """Verify an OTP. Returns (success, message)."""
     otp = OtpRequest.query.filter_by(
-        phone=phone,
+        phone=identifier,
         purpose=purpose,
     ).filter(
         OtpRequest.verified_at.is_(None),
@@ -94,7 +93,7 @@ def verify_otp(phone: str, code: str, purpose: str = 'login') -> tuple[bool, str
 
 
 def create_account(phone: str, display_name: str) -> Account:
-    """Create a new account after OTP verification."""
+    """Create a new account with phone as the primary identifier."""
     handle = generate_handle(display_name, phone)
     account = Account(
         id=str(uuid.uuid4()),
@@ -102,6 +101,23 @@ def create_account(phone: str, display_name: str) -> Account:
         display_name=display_name,
         phone=phone,
         phone_verified=1,
+        modes_enabled={"professional": True, "sparks": False},
+        account_status='active',
+    )
+    db.session.add(account)
+    db.session.commit()
+    return account
+
+
+def create_account_email(email: str, display_name: str) -> Account:
+    """Create a new account with email as the primary identifier (no phone required)."""
+    handle = generate_handle(display_name, email)
+    account = Account(
+        id=str(uuid.uuid4()),
+        handle=handle,
+        display_name=display_name,
+        email=email,
+        email_verified=1,
         modes_enabled={"professional": True, "sparks": False},
         account_status='active',
     )

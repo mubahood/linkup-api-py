@@ -47,7 +47,8 @@ def get_or_create_direct_thread(account_id: str, participant_id: str, mode: str 
     return thread
 
 
-def send_message(thread_id: str, sender_id: str, body: str, msg_type: str = 'text') -> Message:
+def send_message(thread_id: str, sender_id: str, body: str,
+                 msg_type: str = 'text', media: list | None = None) -> Message:
     """Send a message and update thread's last_message_at."""
     msg = Message(
         id=str(uuid.uuid4()),
@@ -55,6 +56,7 @@ def send_message(thread_id: str, sender_id: str, body: str, msg_type: str = 'tex
         sender_id=sender_id,
         body=body,
         type=msg_type,
+        media=media,
     )
     db.session.add(msg)
 

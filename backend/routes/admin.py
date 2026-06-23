@@ -34,34 +34,72 @@ def dashboard(user):
     })
 
 
+def _account_to_admin_dict(a):
+    """Map lu_accounts → shape UsersPage.jsx expects."""
+    modes = a.modes  # safe accessor (T-API-041)
+
+    if a.is_admin:
+        utype = 'Admin'
+    elif a.is_premium:
+        utype = 'Premium'
+    else:
+        utype = 'Member'
+
+    return {
+        'id': a.id,
+        'name': a.display_name,
+        'email': a.email or '',
+        'phone_number': a.phone or '',
+        'username': a.handle or '',
+        'user_type': utype,
+        'status': '1' if a.account_status == 'active' else '0',
+        'avatar': a.avatar,
+        'kyc_level': a.kyc_level,
+        'is_premium': 'Yes' if a.is_premium else 'No',
+        'is_admin': bool(a.is_admin),
+        'modes_enabled': modes,
+        'created_at': a.created_at.isoformat() if a.created_at else None,
+    }
+
+
 @admin_bp.route('/api/admin/users', methods=['GET'])
 @admin_required
 def users_index(user):
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    search = request.args.get('search', '')
-    user_type = request.args.get('user_type', '')
-    status = request.args.get('status', '')
+    from backend.domains.identity.models import Account
 
-    q = AdminUser.query.filter(AdminUser.deleted_at.is_(None))
+    page     = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    search   = request.args.get('search', '')
+    utype    = request.args.get('user_type', '')
+    status   = request.args.get('status', '')
+
+    q = Account.query.filter(Account.deleted_at.is_(None))
+
     if search:
         term = f'%{search}%'
         q = q.filter(or_(
-            AdminUser.name.ilike(term),
-            AdminUser.email.ilike(term),
-            AdminUser.phone_number.ilike(term),
-            AdminUser.username.ilike(term),
+            Account.display_name.ilike(term),
+            Account.email.ilike(term),
+            Account.phone.ilike(term),
+            Account.handle.ilike(term),
         ))
-    if user_type:
-        q = q.filter(AdminUser.user_type == user_type)
-    if status:
-        q = q.filter(AdminUser.status == status)
+    if utype == 'Admin':
+        q = q.filter(Account.is_admin == 1)
+    elif utype in ('Premium', 'Admins'):
+        q = q.filter(Account.is_premium == 1)
+    elif utype in ('Customers', 'Customer'):
+        q = q.filter(Account.is_admin == 0)
 
-    pagination = q.order_by(AdminUser.created_at.desc()).paginate(
+    if status == '1':
+        q = q.filter(Account.account_status == 'active')
+    elif status == '0':
+        q = q.filter(Account.account_status != 'active')
+
+    pagination = q.order_by(Account.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     return success_response("Members loaded", {
-        'data': [u.to_dict() for u in pagination.items],
+        'data': [_account_to_admin_dict(a) for a in pagination.items],
         'total': pagination.total,
         'current_page': pagination.page,
         'last_page': pagination.pages,
@@ -69,83 +107,87 @@ def users_index(user):
     })
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>', methods=['GET'])
+def _get_account(uid):
+    from backend.domains.identity.models import Account
+    # uid may be a UUID string or legacy integer — try both
+    return (Account.query.filter_by(id=str(uid)).filter(Account.deleted_at.is_(None)).first()
+            or Account.query.filter_by(id=uid).first())
+
+
+@admin_bp.route('/api/admin/users/<user_id>', methods=['GET'])
 @admin_required
 def users_show(user, user_id):
-    target = AdminUser.query.get(user_id)
+    target = _get_account(user_id)
     if not target:
         return error_response("Member not found", status_code=404)
-    user_data = target.to_dict()
-    wallet = UserWallet.query.filter_by(user_id=user_id).first()
-    user_data['wallet'] = wallet.to_dict() if wallet else None
-    return success_response("Member loaded", user_data)
+    data = _account_to_admin_dict(target)
+    data['wallet'] = None  # wallet v2 lives in lu_wallets
+    return success_response("Member loaded", data)
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>/update', methods=['POST', 'PUT'])
+@admin_bp.route('/api/admin/users/<user_id>/update', methods=['POST', 'PUT'])
 @admin_required
 def users_update(user, user_id):
-    target = AdminUser.query.get(user_id)
+    target = _get_account(user_id)
     if not target:
         return error_response("Member not found", status_code=404)
     data = request.get_json() or {}
-    for field in ['name', 'first_name', 'last_name', 'email', 'phone_number', 'user_type', 'status']:
-        if field in data:
-            setattr(target, field, data[field])
-    target.updated_at = datetime.utcnow()
+    # Map frontend field names → lu_accounts field names
+    if 'name' in data:         target.display_name   = data['name']
+    if 'email' in data:        target.email          = data['email']
+    if 'phone_number' in data: target.phone          = data['phone_number']
+    if 'username' in data:     target.handle         = data['username']
+    if 'status' in data:
+        target.account_status = 'active' if str(data['status']) == '1' else 'suspended'
+    if 'user_type' in data and data['user_type'] == 'Admin':
+        target.is_admin = 1
     db.session.commit()
-    return success_response("Member updated", target.to_dict())
+    return success_response("Member updated", _account_to_admin_dict(target))
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_bp.route('/api/admin/users/<user_id>/reset-password', methods=['POST'])
 @admin_required
 def users_reset_password(user, user_id):
     import bcrypt
-    target = AdminUser.query.get(user_id)
+    target = _get_account(user_id)
     if not target:
         return error_response("Member not found", status_code=404)
     data = request.get_json() or {}
-    new_password = data.get('new_password', 'LinkUp2026!')
-    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-    target.password = hashed
-    target.updated_at = datetime.utcnow()
+    new_password = data.get('new_password', '111111')
+    target.password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
     db.session.commit()
     return success_response("Password reset successfully")
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>/toggle-status', methods=['POST'])
+@admin_bp.route('/api/admin/users/<user_id>/toggle-status', methods=['POST'])
 @admin_required
 def toggle_status(user, user_id):
-    target = AdminUser.query.get(user_id)
+    target = _get_account(user_id)
     if not target:
         return error_response("Member not found", status_code=404)
-    target.status = '0' if target.status == '1' else '1'
-    target.updated_at = datetime.utcnow()
+    target.account_status = 'suspended' if target.account_status == 'active' else 'active'
     db.session.commit()
-    return success_response("Status updated", {'status': target.status})
+    new_status = '1' if target.account_status == 'active' else '0'
+    return success_response("Status updated", {'status': new_status})
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>/delete', methods=['POST', 'DELETE'])
+@admin_bp.route('/api/admin/users/<user_id>/delete', methods=['POST', 'DELETE'])
 @admin_required
 def users_delete(user, user_id):
-    target = AdminUser.query.get(user_id)
+    target = _get_account(user_id)
     if not target:
         return error_response("Member not found", status_code=404)
     target.deleted_at = datetime.utcnow()
-    target.status = '0'
+    target.account_status = 'closed'
     db.session.commit()
     return success_response("Member deleted")
 
 
-@admin_bp.route('/api/admin/users/<int:user_id>/wallet', methods=['GET'])
+@admin_bp.route('/api/admin/users/<user_id>/wallet', methods=['GET'])
 @admin_required
 def users_wallet(user, user_id):
-    wallet = UserWallet.query.filter_by(user_id=user_id).first()
-    transactions = Transaction.query.filter_by(user_id=user_id)\
-        .order_by(Transaction.created_at.desc()).limit(20).all()
-    return success_response("Wallet loaded", {
-        'wallet': wallet.to_dict() if wallet else None,
-        'transactions': [t.to_dict() for t in transactions],
-    })
+    # Wallet data lives in lu_wallets for v1 accounts
+    return success_response("Wallet loaded", {'wallet': None, 'transactions': []})
 
 
 @admin_bp.route('/api/admin/system/health', methods=['GET'])

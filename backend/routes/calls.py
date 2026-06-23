@@ -17,14 +17,12 @@ from flask import Blueprint, request
 from backend.models import db
 from backend.models.call_log import CallLog
 from backend.models.user import AdminUser
+from backend.domains.identity.models import Account
 from backend.utils.auth import jwt_required_with_user
 from backend.utils.response import success_response, error_response
 
 calls_bp = Blueprint('calls', __name__)
 
-
-def _is_participant(negotiation, user_id):
-    return user_id in (negotiation.customer_id, negotiation.driver_id)
 
 
 def _get_local_ip():
@@ -100,23 +98,20 @@ def create_call_log(user):
     if not callee_id:
         return error_response("callee_id is required")
 
-    # Validate callee exists
-    callee = db.session.get(AdminUser, int(callee_id))
+    # Validate callee exists (UUID lookup via Account)
+    callee = db.session.get(Account, str(callee_id))
+    if not callee:
+        # Fallback: legacy integer AdminUser
+        try:
+            callee = db.session.get(AdminUser, int(callee_id))
+        except (ValueError, TypeError):
+            callee = None
     if not callee:
         return error_response("Callee not found", status_code=404)
 
-    # Validate negotiation context if provided
-    if negotiation_id:
-        neg = db.session.get(Negotiation, int(negotiation_id))
-        if not neg:
-            return error_response("Negotiation not found", status_code=404)
-        if not _is_participant(neg, user.id):
-            return error_response("You are not a participant in this negotiation", status_code=403)
-
     call_log = CallLog(
-        caller_id=user.id,
-        callee_id=int(callee_id),
-        negotiation_id=int(negotiation_id) if negotiation_id else None,
+        caller_id=str(user.id),
+        callee_id=str(callee_id),
         call_type=call_type,
         status='initiated',
     )

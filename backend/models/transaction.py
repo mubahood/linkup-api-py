@@ -8,7 +8,7 @@ class Transaction(db.Model):
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey('admin_users.id'), nullable=False)
-    user_type = db.Column(db.Enum('customer', 'driver'), nullable=False)
+    user_type = db.Column(db.String(25), nullable=False)
     payment_id = db.Column(db.BigInteger, db.ForeignKey('payments.id'), nullable=True)
     type = db.Column(db.Enum('credit', 'debit'), nullable=False)
     category = db.Column(db.Enum('ride_payment', 'ride_earning', 'service_fee', 'refund', 'wallet_topup', 'withdrawal', 'bonus', 'penalty'), nullable=False)

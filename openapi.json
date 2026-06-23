@@ -1,0 +1,7278 @@
+{
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Uganda-first professional + dating network. Envelope: `{code:1|0, message, data}`. Auth: Bearer JWT.",
+    "title": "LinkUp API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/admin/auth/login": {
+      "post": {
+        "operationId": "post_admin.admin_login",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /api/admin/auth/login",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "operationId": "get_admin.dashboard",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/admin/dashboard",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/system/health": {
+      "get": {
+        "operationId": "get_admin.system_health",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /api/admin/system/health",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "operationId": "get_admin.users_index",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/admin/users",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}": {
+      "get": {
+        "operationId": "get_admin.users_show",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/admin/users/{user_id}",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/delete": {
+      "delete": {
+        "operationId": "delete_admin.users_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /api/admin/users/{user_id}/delete",
+        "tags": [
+          "api"
+        ]
+      },
+      "post": {
+        "operationId": "post_admin.users_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/admin/users/{user_id}/delete",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/reset-password": {
+      "post": {
+        "operationId": "post_admin.users_reset_password",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/admin/users/{user_id}/reset-password",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/toggle-status": {
+      "post": {
+        "operationId": "post_admin.toggle_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/admin/users/{user_id}/toggle-status",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/update": {
+      "post": {
+        "operationId": "post_admin.users_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/admin/users/{user_id}/update",
+        "tags": [
+          "api"
+        ]
+      },
+      "put": {
+        "operationId": "put_admin.users_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /api/admin/users/{user_id}/update",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/wallet": {
+      "get": {
+        "operationId": "get_admin.users_wallet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/admin/users/{user_id}/wallet",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "operationId": "post_auth.forgot_password",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/auth/forgot-password",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "operationId": "post_auth.reset_password",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/auth/reset-password",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/call/active": {
+      "get": {
+        "operationId": "get_calls.get_active_calls",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/call/active",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/call/history": {
+      "get": {
+        "operationId": "get_calls.get_call_history",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/call/history",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/call/ice-config": {
+      "get": {
+        "operationId": "get_calls.get_ice_config",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/call/ice-config",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/call/log": {
+      "post": {
+        "operationId": "post_calls.create_call_log",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/call/log",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/call/log/{call_id}": {
+      "put": {
+        "operationId": "put_calls.update_call_log",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "call_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /api/call/log/{call_id}",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/chat-heads": {
+      "get": {
+        "operationId": "get_chat.chat_heads",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/chat-heads",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/chat-heads-create": {
+      "post": {
+        "operationId": "post_chat.create_chat_head",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/chat-heads-create",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/chat-messages": {
+      "get": {
+        "operationId": "get_chat.messages",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/chat-messages",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/chat-send": {
+      "post": {
+        "operationId": "post_chat.send_message",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/chat-send",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/email/resend-verification": {
+      "post": {
+        "operationId": "post_auth.resend_verification",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/email/resend-verification",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/email/verify/{token}": {
+      "get": {
+        "operationId": "get_auth.verify_email",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/email/verify/{token}",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/endorsements": {
+      "get": {
+        "operationId": "get_ratings.list_endorsements",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/endorsements",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/otp-request": {
+      "post": {
+        "operationId": "post_auth.otp_request",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/otp-request",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/otp-verify": {
+      "post": {
+        "operationId": "post_auth.otp_verify",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/otp-verify",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/payments/flutterwave/initiate": {
+      "post": {
+        "operationId": "post_flutterwave.initiate_payment",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/payments/flutterwave/initiate",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/avatar": {
+      "post": {
+        "operationId": "post_profile.upload_avatar",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/avatar",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/change-password": {
+      "post": {
+        "operationId": "post_profile.change_password",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/change-password",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/delete-account": {
+      "post": {
+        "operationId": "post_profile.delete_account",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/delete-account",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/update": {
+      "post": {
+        "operationId": "post_profile.update",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/update",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/update-email": {
+      "post": {
+        "operationId": "post_profile.update_email",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/update-email",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/profile/update-phone": {
+      "post": {
+        "operationId": "post_profile.update_phone",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/profile/update-phone",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/users/login": {
+      "post": {
+        "operationId": "post_auth.login",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/users/login",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "operationId": "get_auth.me",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/users/me",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/users/register": {
+      "post": {
+        "operationId": "post_auth.register",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /api/users/register",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/wallet": {
+      "get": {
+        "operationId": "get_wallet.get_wallet",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/wallet",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/wallet/earnings": {
+      "get": {
+        "operationId": "get_wallet.earnings",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/wallet/earnings",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/wallet/summary": {
+      "get": {
+        "operationId": "get_wallet.summary",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/wallet/summary",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/api/wallet/transactions": {
+      "get": {
+        "operationId": "get_wallet.transactions",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /api/wallet/transactions",
+        "tags": [
+          "api"
+        ]
+      }
+    },
+    "/v1/_catalog": {
+      "get": {
+        "operationId": "get_v1_catalog",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/_catalog",
+        "tags": [
+          "_catalog"
+        ]
+      }
+    },
+    "/v1/_debug/boom": {
+      "get": {
+        "operationId": "get__debug_boom",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/_debug/boom",
+        "tags": [
+          "_debug"
+        ]
+      }
+    },
+    "/v1/admin/accounts": {
+      "get": {
+        "operationId": "get_v1_admin.list_accounts",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/accounts",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/accounts/{account_id}": {
+      "get": {
+        "operationId": "get_v1_admin.get_account",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/accounts/{account_id}",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/accounts/{account_id}/premium": {
+      "put": {
+        "operationId": "put_v1_admin.set_premium",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/admin/accounts/{account_id}/premium",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/accounts/{account_id}/status": {
+      "put": {
+        "operationId": "put_v1_admin.set_account_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/admin/accounts/{account_id}/status",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/events": {
+      "get": {
+        "operationId": "get_v1_admin.behavioral_events",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/events",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/hubs": {
+      "get": {
+        "operationId": "get_v1_admin.list_hubs_admin",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/hubs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/login": {
+      "post": {
+        "operationId": "post_v1_admin.admin_login",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/admin/login",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/reports": {
+      "get": {
+        "operationId": "get_v1_admin.list_reports",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/reports",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/reports/{report_id}/resolve": {
+      "put": {
+        "operationId": "put_v1_admin.resolve_report",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/admin/reports/{report_id}/resolve",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/stats": {
+      "get": {
+        "operationId": "get_v1_admin.stats",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/admin/stats",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/auth/accounts/{account_id}/presence": {
+      "get": {
+        "operationId": "get_v1_identity.account_presence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/auth/accounts/{account_id}/presence",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/device": {
+      "post": {
+        "operationId": "post_v1_identity.register_device",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/device",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/ice": {
+      "get": {
+        "operationId": "get_v1_identity.ice_config",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/auth/ice",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/kyc/advance": {
+      "post": {
+        "operationId": "post_v1_identity.kyc_advance",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/kyc/advance",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/location": {
+      "post": {
+        "operationId": "post_v1_identity.update_location",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/location",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "post_v1_identity.login",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /v1/auth/login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "post_v1_identity.logout",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "operationId": "get_v1_identity.me",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/auth/me",
+        "tags": [
+          "auth"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_identity.update_me",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/auth/me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/otp/request": {
+      "post": {
+        "operationId": "post_v1_identity.otp_request",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /v1/auth/otp/request",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/otp/verify": {
+      "post": {
+        "operationId": "post_v1_identity.otp_verify",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /v1/auth/otp/verify",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password": {
+      "post": {
+        "operationId": "post_v1_identity.change_password",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password/reset": {
+      "post": {
+        "operationId": "post_v1_identity.password_reset",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/password/reset",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password/reset/request": {
+      "post": {
+        "operationId": "post_v1_identity.password_reset_request",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/password/reset/request",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "post_v1_identity.refresh",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/auth/refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "operationId": "post_v1_identity.register",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /v1/auth/register",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/comments/{comment_id}": {
+      "delete": {
+        "operationId": "delete_posts.delete_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/comments/{comment_id}",
+        "tags": [
+          "comments"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_posts.update_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PATCH /v1/comments/{comment_id}",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/v1/comments/{comment_id}/like": {
+      "post": {
+        "operationId": "post_posts.toggle_comment_like",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/comments/{comment_id}/like",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/v1/endorsements": {
+      "post": {
+        "operationId": "post_v1_endorsements.create_endorsement",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/endorsements",
+        "tags": [
+          "endorsements"
+        ]
+      }
+    },
+    "/v1/endorsements/@{handle}": {
+      "get": {
+        "operationId": "get_v1_endorsements.account_endorsements",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/endorsements/@{handle}",
+        "tags": [
+          "endorsements"
+        ]
+      }
+    },
+    "/v1/endorsements/received": {
+      "get": {
+        "operationId": "get_v1_endorsements.my_endorsements",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/endorsements/received",
+        "tags": [
+          "endorsements"
+        ]
+      }
+    },
+    "/v1/endorsements/{endorsement_id}": {
+      "delete": {
+        "operationId": "delete_v1_endorsements.delete_endorsement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endorsement_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/endorsements/{endorsement_id}",
+        "tags": [
+          "endorsements"
+        ]
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "get_v1_events.list_events",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/events",
+        "tags": [
+          "events"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_events.create_event",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/events",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/going": {
+      "get": {
+        "operationId": "get_v1_events.events_going",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/events/going",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/mine": {
+      "get": {
+        "operationId": "get_v1_events.my_events",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/events/mine",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{event_id}": {
+      "delete": {
+        "operationId": "delete_v1_events.cancel_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/events/{event_id}",
+        "tags": [
+          "events"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_events.get_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/events/{event_id}",
+        "tags": [
+          "events"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_events.update_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/events/{event_id}",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{event_id}/attendees": {
+      "get": {
+        "operationId": "get_v1_events.attendees",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/events/{event_id}/attendees",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/events/{event_id}/rsvp": {
+      "post": {
+        "operationId": "post_v1_events.rsvp",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/events/{event_id}/rsvp",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/v1/feed/home": {
+      "get": {
+        "operationId": "get_v1_feed.home_feed",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/feed/home",
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "get_v1_health",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /v1/health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/hubs": {
+      "get": {
+        "operationId": "get_v1_hubs.list_hubs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_hubs.create_hub",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/mine": {
+      "get": {
+        "operationId": "get_v1_hubs.my_hubs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/mine",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}": {
+      "delete": {
+        "operationId": "delete_v1_hubs.delete_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/hubs/{hub_id}",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_hubs.get_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_hubs.update_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/hubs/{hub_id}",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/invite": {
+      "post": {
+        "operationId": "post_v1_hubs.invite_to_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/invite",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/join": {
+      "post": {
+        "operationId": "post_v1_hubs.join_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/join",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/leave": {
+      "post": {
+        "operationId": "post_v1_hubs.leave_hub",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/leave",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/members": {
+      "get": {
+        "operationId": "get_v1_hubs.hub_members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}/members",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/members/{member_account_id}": {
+      "delete": {
+        "operationId": "delete_v1_hubs.remove_member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/hubs/{hub_id}/members/{member_account_id}",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/members/{member_account_id}/role": {
+      "put": {
+        "operationId": "put_v1_hubs.change_member_role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/hubs/{hub_id}/members/{member_account_id}/role",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts": {
+      "get": {
+        "operationId": "get_v1_hubs.hub_posts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}/posts",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_hubs.create_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/posts",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts/{post_id}": {
+      "delete": {
+        "operationId": "delete_v1_hubs.delete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/hubs/{hub_id}/posts/{post_id}",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_hubs.get_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}/posts/{post_id}",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_hubs.edit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/hubs/{hub_id}/posts/{post_id}",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts/{post_id}/comments": {
+      "get": {
+        "operationId": "get_v1_hubs.list_comments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}/posts/{post_id}/comments",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_hubs.create_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/posts/{post_id}/comments",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts/{post_id}/comments/{comment_id}": {
+      "delete": {
+        "operationId": "delete_v1_hubs.delete_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/hubs/{hub_id}/posts/{post_id}/comments/{comment_id}",
+        "tags": [
+          "hubs"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_hubs.edit_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/hubs/{hub_id}/posts/{post_id}/comments/{comment_id}",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts/{post_id}/like": {
+      "post": {
+        "operationId": "post_v1_hubs.like_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/hubs/{hub_id}/posts/{post_id}/like",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/hubs/{hub_id}/posts/{post_id}/likes": {
+      "get": {
+        "operationId": "get_v1_hubs.post_likes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hub_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/hubs/{hub_id}/posts/{post_id}/likes",
+        "tags": [
+          "hubs"
+        ]
+      }
+    },
+    "/v1/interests/me": {
+      "get": {
+        "operationId": "get_v1_interest.my_interests",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/interests/me",
+        "tags": [
+          "interests"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_interest.set_interests",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/interests/me",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/interests/me/{tag_id}": {
+      "delete": {
+        "operationId": "delete_v1_interest.remove_interest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/interests/me/{tag_id}",
+        "tags": [
+          "interests"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_interest.update_interest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/interests/me/{tag_id}",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/interests/search": {
+      "get": {
+        "operationId": "get_v1_interest.search",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/interests/search",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/interests/signal": {
+      "post": {
+        "operationId": "post_v1_interest.signal_interest",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/interests/signal",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/interests/suggestions": {
+      "get": {
+        "operationId": "get_v1_interest.suggestions",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/interests/suggestions",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/interests/taxonomy": {
+      "get": {
+        "operationId": "get_v1_interest.taxonomy",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/interests/taxonomy",
+        "tags": [
+          "interests"
+        ]
+      }
+    },
+    "/v1/jobs": {
+      "get": {
+        "operationId": "get_v1_jobs.jobs_feed",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_jobs.post_job",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/applications": {
+      "get": {
+        "operationId": "get_v1_jobs.my_applications",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/applications",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/applications/{application_id}/status": {
+      "put": {
+        "operationId": "put_v1_jobs.update_application_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/jobs/applications/{application_id}/status",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/for-you": {
+      "get": {
+        "operationId": "get_v1_jobs.jobs_for_you",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/for-you",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/mine": {
+      "get": {
+        "operationId": "get_v1_jobs.my_jobs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/mine",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/referrals/received": {
+      "get": {
+        "operationId": "get_v1_jobs.received_referrals",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/referrals/received",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/referrals/sent": {
+      "get": {
+        "operationId": "get_v1_jobs.sent_referrals",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/referrals/sent",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/referrals/{referral_id}/respond": {
+      "post": {
+        "operationId": "post_v1_jobs.respond_referral",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "referral_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/referrals/{referral_id}/respond",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/saved": {
+      "get": {
+        "operationId": "get_v1_jobs.saved_jobs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/saved",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}": {
+      "delete": {
+        "operationId": "delete_v1_jobs.delete_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/jobs/{job_id}",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_jobs.get_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/{job_id}",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_jobs.update_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/jobs/{job_id}",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/applicants": {
+      "get": {
+        "operationId": "get_v1_jobs.job_applicants",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/{job_id}/applicants",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/apply": {
+      "post": {
+        "operationId": "post_v1_jobs.apply_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/apply",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/close": {
+      "post": {
+        "operationId": "post_v1_jobs.close_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/close",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/contact-poster": {
+      "post": {
+        "operationId": "post_v1_jobs.contact_poster",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/contact-poster",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/referral": {
+      "post": {
+        "operationId": "post_v1_jobs.request_referral",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/referral",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/reopen": {
+      "post": {
+        "operationId": "post_v1_jobs.reopen_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/reopen",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/save": {
+      "post": {
+        "operationId": "post_v1_jobs.save_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/save",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/stats": {
+      "get": {
+        "operationId": "get_v1_jobs.job_stats",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/jobs/{job_id}/stats",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/withdraw": {
+      "post": {
+        "operationId": "post_v1_jobs.withdraw_application",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/jobs/{job_id}/withdraw",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/links": {
+      "get": {
+        "operationId": "get_v1_links.my_links",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/mutual/{target_account_id}": {
+      "get": {
+        "operationId": "get_v1_links.mutual_connections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links/mutual/{target_account_id}",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/request": {
+      "post": {
+        "operationId": "post_v1_links.send_request",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/links/request",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/requests": {
+      "get": {
+        "operationId": "get_v1_links.link_requests",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links/requests",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/status/{target_id}": {
+      "get": {
+        "operationId": "get_v1_links.link_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links/status/{target_id}",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/suggestions": {
+      "get": {
+        "operationId": "get_v1_links.suggestions",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links/suggestions",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/{link_id}": {
+      "delete": {
+        "operationId": "delete_v1_links.remove_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/links/{link_id}",
+        "tags": [
+          "links"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_links.link_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/links/{link_id}",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/{link_id}/accept": {
+      "post": {
+        "operationId": "post_v1_links.accept_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/links/{link_id}/accept",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/links/{link_id}/decline": {
+      "post": {
+        "operationId": "post_v1_links.decline_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/links/{link_id}/decline",
+        "tags": [
+          "links"
+        ]
+      }
+    },
+    "/v1/mentorship/mentors": {
+      "get": {
+        "operationId": "get_v1_mentorship.list_mentors",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/mentorship/mentors",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/mentors/@{handle}": {
+      "get": {
+        "operationId": "get_v1_mentorship.get_mentor_by_handle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/mentorship/mentors/@{handle}",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/mentors/me": {
+      "delete": {
+        "operationId": "delete_v1_mentorship.delete_mentor_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/mentorship/mentors/me",
+        "tags": [
+          "mentorship"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_mentorship.my_mentor_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/mentorship/mentors/me",
+        "tags": [
+          "mentorship"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_mentorship.create_mentor_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/mentorship/mentors/me",
+        "tags": [
+          "mentorship"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_mentorship.update_mentor_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/mentorship/mentors/me",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests": {
+      "post": {
+        "operationId": "post_v1_mentorship.send_request",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/mentorship/requests",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests/received": {
+      "get": {
+        "operationId": "get_v1_mentorship.received_requests",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/mentorship/requests/received",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests/sent": {
+      "get": {
+        "operationId": "get_v1_mentorship.sent_requests",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/mentorship/requests/sent",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests/{request_id}/complete": {
+      "post": {
+        "operationId": "post_v1_mentorship.complete_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/mentorship/requests/{request_id}/complete",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests/{request_id}/respond": {
+      "post": {
+        "operationId": "post_v1_mentorship.respond_to_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/mentorship/requests/{request_id}/respond",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/mentorship/requests/{request_id}/withdraw": {
+      "post": {
+        "operationId": "post_v1_mentorship.withdraw_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/mentorship/requests/{request_id}/withdraw",
+        "tags": [
+          "mentorship"
+        ]
+      }
+    },
+    "/v1/notifications": {
+      "get": {
+        "operationId": "get_v1_notifications.list_notifications",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/preferences": {
+      "get": {
+        "operationId": "get_v1_notifications.get_preferences",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/notifications/preferences",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_notifications.update_preferences",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/notifications/preferences",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/read": {
+      "post": {
+        "operationId": "post_v1_notifications.mark_read",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/notifications/read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/read-all": {
+      "post": {
+        "operationId": "post_v1_notifications.mark_all_read",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/notifications/read-all",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/unread-count": {
+      "get": {
+        "operationId": "get_v1_notifications.unread_count",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/notifications/unread-count",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/{notif_id}/read": {
+      "post": {
+        "operationId": "post_v1_notifications.mark_one_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notif_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/notifications/{notif_id}/read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "get_v1_openapi",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/openapi.json",
+        "tags": [
+          "openapi.json"
+        ]
+      }
+    },
+    "/v1/photos": {
+      "get": {
+        "operationId": "get_v1_photos.list_own_photos",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/photos",
+        "tags": [
+          "photos"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_photos.upload_photo",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/photos",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/v1/photos/account/{account_id}": {
+      "get": {
+        "operationId": "get_v1_photos.list_user_photos",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/photos/account/{account_id}",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/v1/photos/counts": {
+      "get": {
+        "operationId": "get_v1_photos.photo_counts",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/photos/counts",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/v1/photos/{photo_id}": {
+      "delete": {
+        "operationId": "delete_v1_photos.delete_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/photos/{photo_id}",
+        "tags": [
+          "photos"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_v1_photos.update_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PATCH /v1/photos/{photo_id}",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/v1/posts": {
+      "post": {
+        "operationId": "post_posts.create_post",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/by/{account_id}": {
+      "get": {
+        "operationId": "get_posts.get_by_account",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/by/{account_id}",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/feed": {
+      "get": {
+        "operationId": "get_posts.get_feed",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/feed",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/saved": {
+      "get": {
+        "operationId": "get_posts.get_saved",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/saved",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/trending": {
+      "get": {
+        "operationId": "get_posts.get_trending",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/trending",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}": {
+      "delete": {
+        "operationId": "delete_posts.delete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/posts/{post_id}",
+        "tags": [
+          "posts"
+        ]
+      },
+      "get": {
+        "operationId": "get_posts.get_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/{post_id}",
+        "tags": [
+          "posts"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_posts.update_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PATCH /v1/posts/{post_id}",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/comments": {
+      "get": {
+        "operationId": "get_posts.get_comments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/{post_id}/comments",
+        "tags": [
+          "posts"
+        ]
+      },
+      "post": {
+        "operationId": "post_posts.add_comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/comments",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/like": {
+      "post": {
+        "operationId": "post_posts.toggle_like",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/like",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/likes": {
+      "get": {
+        "operationId": "get_posts.get_likers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/posts/{post_id}/likes",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/poll/vote": {
+      "post": {
+        "operationId": "post_posts.vote_poll",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/poll/vote",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/save": {
+      "post": {
+        "operationId": "post_posts.toggle_save",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/save",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/share": {
+      "post": {
+        "operationId": "post_posts.share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/share",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/posts/{post_id}/view": {
+      "post": {
+        "operationId": "post_posts.register_view",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/posts/{post_id}/view",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/v1/profile/@{handle}": {
+      "get": {
+        "operationId": "get_v1_profile.get_profile_by_handle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/@{handle}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/@{handle}/posts": {
+      "get": {
+        "operationId": "get_v1_profile.member_posts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/@{handle}/posts",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/compatibility/{target_id}": {
+      "get": {
+        "operationId": "get_v1_profile.compatibility",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/compatibility/{target_id}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/completion": {
+      "get": {
+        "operationId": "get_v1_profile.completion",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/completion",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/journey": {
+      "get": {
+        "operationId": "get_v1_profile.journey",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/journey",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me": {
+      "delete": {
+        "operationId": "delete_v1_profile.delete_account",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/profile/me",
+        "tags": [
+          "profile"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_profile.get_my_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/me",
+        "tags": [
+          "profile"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_profile.update_my_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/profile/me",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/certifications": {
+      "post": {
+        "operationId": "post_v1_profile.add_certification",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/profile/me/certifications",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/certifications/{cert_id}": {
+      "delete": {
+        "operationId": "delete_v1_profile.delete_certification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cert_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/profile/me/certifications/{cert_id}",
+        "tags": [
+          "profile"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_profile.update_certification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cert_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/profile/me/certifications/{cert_id}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/dating": {
+      "delete": {
+        "operationId": "delete_v1_profile.delete_dating_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/profile/me/dating",
+        "tags": [
+          "profile"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_profile.get_dating_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/me/dating",
+        "tags": [
+          "profile"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_profile.update_dating_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/profile/me/dating",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/education": {
+      "post": {
+        "operationId": "post_v1_profile.add_education",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/profile/me/education",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/education/{edu_id}": {
+      "delete": {
+        "operationId": "delete_v1_profile.delete_education",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "edu_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/profile/me/education/{edu_id}",
+        "tags": [
+          "profile"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_profile.update_education",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "edu_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/profile/me/education/{edu_id}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/experience": {
+      "post": {
+        "operationId": "post_v1_profile.add_experience",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/profile/me/experience",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/experience/{exp_id}": {
+      "delete": {
+        "operationId": "delete_v1_profile.delete_experience",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exp_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/profile/me/experience/{exp_id}",
+        "tags": [
+          "profile"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_profile.update_experience",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exp_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/profile/me/experience/{exp_id}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/photo": {
+      "post": {
+        "operationId": "post_v1_profile.upload_photo",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/profile/me/photo",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/me/stats": {
+      "get": {
+        "operationId": "get_v1_profile.my_profile_stats",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/me/stats",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/profile/{account_id}": {
+      "get": {
+        "operationId": "get_v1_profile.get_profile_by_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/profile/{account_id}",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/v1/reference/institutions": {
+      "get": {
+        "operationId": "get_v1_reference.institutions",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /v1/reference/institutions",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/v1/reference/institutions/suggest": {
+      "post": {
+        "operationId": "post_v1_reference.suggest_institution",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "POST /v1/reference/institutions/suggest",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/v1/reference/locations": {
+      "get": {
+        "operationId": "get_v1_reference.locations",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /v1/reference/locations",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/v1/reference/orgs": {
+      "get": {
+        "operationId": "get_v1_reference.orgs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /v1/reference/orgs",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/v1/safety/block": {
+      "post": {
+        "operationId": "post_v1_safety.block_account",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/block",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/block/{block_id}": {
+      "delete": {
+        "operationId": "delete_v1_safety.unblock_account",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/safety/block/{block_id}",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/blocks": {
+      "get": {
+        "operationId": "get_v1_safety.list_blocks",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/safety/blocks",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/contacts": {
+      "get": {
+        "operationId": "get_v1_safety.list_safety_contacts",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/safety/contacts",
+        "tags": [
+          "safety"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_safety.add_safety_contact",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/contacts",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/contacts/{contact_id}": {
+      "delete": {
+        "operationId": "delete_v1_safety.delete_safety_contact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contact_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/safety/contacts/{contact_id}",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/date-checkins": {
+      "get": {
+        "operationId": "get_v1_safety.list_date_checkins",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/safety/date-checkins",
+        "tags": [
+          "safety"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_safety.create_date_checkin",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/date-checkins",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/date-checkins/{checkin_id}": {
+      "delete": {
+        "operationId": "delete_v1_safety.cancel_date_checkin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkin_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/safety/date-checkins/{checkin_id}",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/date-checkins/{checkin_id}/confirm": {
+      "post": {
+        "operationId": "post_v1_safety.confirm_date_checkin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkin_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/date-checkins/{checkin_id}/confirm",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/date-checkins/{checkin_id}/share-location": {
+      "delete": {
+        "operationId": "delete_v1_safety.revoke_location_share",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkin_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/safety/date-checkins/{checkin_id}/share-location",
+        "tags": [
+          "safety"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_safety.share_location",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkin_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/date-checkins/{checkin_id}/share-location",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/location/{token}": {
+      "get": {
+        "operationId": "get_v1_safety.view_shared_location",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "summary": "GET /v1/safety/location/{token}",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/panic": {
+      "post": {
+        "operationId": "post_v1_safety.panic_sos",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/panic",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/safety/report": {
+      "post": {
+        "operationId": "post_v1_safety.file_report",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/safety/report",
+        "tags": [
+          "safety"
+        ]
+      }
+    },
+    "/v1/search/all": {
+      "get": {
+        "operationId": "get_v1_search.search_all",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/search/all",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/v1/search/events": {
+      "get": {
+        "operationId": "get_v1_search.events",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/search/events",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/v1/search/hubs": {
+      "get": {
+        "operationId": "get_v1_search.hubs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/search/hubs",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/v1/search/jobs": {
+      "get": {
+        "operationId": "get_v1_search.jobs",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/search/jobs",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/v1/search/people": {
+      "get": {
+        "operationId": "get_v1_search.people",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/search/people",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/v1/sparks/action": {
+      "post": {
+        "operationId": "post_v1_sparks.action",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/sparks/action",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/deck": {
+      "get": {
+        "operationId": "get_v1_sparks.deck",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/deck",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/likes": {
+      "get": {
+        "operationId": "get_v1_sparks.incoming_likes",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/likes",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/matches": {
+      "get": {
+        "operationId": "get_v1_sparks.matches",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/matches",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/matches/{match_id}": {
+      "get": {
+        "operationId": "get_v1_sparks.match_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/matches/{match_id}",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/matches/{match_id}/met": {
+      "post": {
+        "operationId": "post_v1_sparks.mark_met",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/sparks/matches/{match_id}/met",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/matches/{match_id}/unmatch": {
+      "post": {
+        "operationId": "post_v1_sparks.unmatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/sparks/matches/{match_id}/unmatch",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/profile": {
+      "get": {
+        "operationId": "get_v1_sparks.get_dating_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/profile",
+        "tags": [
+          "sparks"
+        ]
+      },
+      "put": {
+        "operationId": "put_v1_sparks.update_dating_profile",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/sparks/profile",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/profile/photos": {
+      "post": {
+        "operationId": "post_v1_sparks.add_dating_photo",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/sparks/profile/photos",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/profile/photos/reorder": {
+      "put": {
+        "operationId": "put_v1_sparks.reorder_dating_photos",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "PUT /v1/sparks/profile/photos/reorder",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/profile/photos/{photo_index}": {
+      "delete": {
+        "operationId": "delete_v1_sparks.delete_dating_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_index",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/sparks/profile/photos/{photo_index}",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/standout-count": {
+      "get": {
+        "operationId": "get_v1_sparks.standout_count",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/standout-count",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/sparks/stats": {
+      "get": {
+        "operationId": "get_v1_sparks.dating_stats",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/sparks/stats",
+        "tags": [
+          "sparks"
+        ]
+      }
+    },
+    "/v1/threads": {
+      "get": {
+        "operationId": "get_v1_chat.list_threads",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/threads",
+        "tags": [
+          "threads"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_chat.create_thread",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}": {
+      "get": {
+        "operationId": "get_v1_chat.get_thread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/threads/{thread_id}",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/archive": {
+      "post": {
+        "operationId": "post_v1_chat.archive_thread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/archive",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/clear": {
+      "post": {
+        "operationId": "post_v1_chat.clear_thread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/clear",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/media": {
+      "post": {
+        "operationId": "post_v1_chat.upload_chat_media",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/media",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/messages": {
+      "get": {
+        "operationId": "get_v1_chat.thread_messages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/threads/{thread_id}/messages",
+        "tags": [
+          "threads"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_chat.post_message",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/messages",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/messages/{message_id}": {
+      "delete": {
+        "operationId": "delete_v1_chat.delete_message",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "DELETE /v1/threads/{thread_id}/messages/{message_id}",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/messages/{message_id}/react": {
+      "post": {
+        "operationId": "post_v1_chat.react_message",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/messages/{message_id}/react",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/messages/{message_id}/reactions": {
+      "get": {
+        "operationId": "get_v1_chat.message_reactions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/threads/{thread_id}/messages/{message_id}/reactions",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/participants": {
+      "get": {
+        "operationId": "get_v1_chat.list_participants",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/threads/{thread_id}/participants",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/threads/{thread_id}/read": {
+      "post": {
+        "operationId": "post_v1_chat.mark_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/threads/{thread_id}/read",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
+    "/v1/wallet/balance": {
+      "get": {
+        "operationId": "get_v1_wallet.balance",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/wallet/balance",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/v1/wallet/topup": {
+      "post": {
+        "operationId": "post_v1_wallet.topup",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/wallet/topup",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/v1/wallet/topup/{tx_ref}/verify": {
+      "get": {
+        "operationId": "get_v1_wallet.verify_topup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tx_ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/wallet/topup/{tx_ref}/verify",
+        "tags": [
+          "wallet"
+        ]
+      },
+      "post": {
+        "operationId": "post_v1_wallet.verify_topup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tx_ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "POST /v1/wallet/topup/{tx_ref}/verify",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/v1/wallet/transactions": {
+      "get": {
+        "operationId": "get_v1_wallet.transactions",
+        "responses": {
+          "200": {
+            "description": "Success \u2014 `{code:1, message, data}`"
+          },
+          "400": {
+            "description": "Error \u2014 `{code:0, message}`"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "GET /v1/wallet/transactions",
+        "tags": [
+          "wallet"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5001"
+    }
+  ],
+  "tags": [
+    {
+      "name": "_catalog"
+    },
+    {
+      "name": "_debug"
+    },
+    {
+      "name": "admin"
+    },
+    {
+      "name": "api"
+    },
+    {
+      "name": "auth"
+    },
+    {
+      "name": "comments"
+    },
+    {
+      "name": "endorsements"
+    },
+    {
+      "name": "events"
+    },
+    {
+      "name": "feed"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "hubs"
+    },
+    {
+      "name": "interests"
+    },
+    {
+      "name": "jobs"
+    },
+    {
+      "name": "links"
+    },
+    {
+      "name": "mentorship"
+    },
+    {
+      "name": "notifications"
+    },
+    {
+      "name": "openapi.json"
+    },
+    {
+      "name": "photos"
+    },
+    {
+      "name": "posts"
+    },
+    {
+      "name": "profile"
+    },
+    {
+      "name": "reference"
+    },
+    {
+      "name": "safety"
+    },
+    {
+      "name": "search"
+    },
+    {
+      "name": "sparks"
+    },
+    {
+      "name": "threads"
+    },
+    {
+      "name": "wallet"
+    }
+  ]
+}

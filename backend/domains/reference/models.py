@@ -39,20 +39,24 @@ class Institution(db.Model):
     type = db.Column(db.String(30), default='university')
     country = db.Column(db.String(100), default='Uganda')
     district = db.Column(db.String(100), nullable=True)
-    website = db.Column(db.String(300), nullable=True)
-    verified = db.Column(db.SmallInteger, default=0)
+    website    = db.Column(db.String(300), nullable=True)
+    verified   = db.Column(db.SmallInteger, default=0)
+    sort_order = db.Column(db.SmallInteger, default=100)
+    is_popular = db.Column(db.SmallInteger, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'name': self.name,
+            'id':         self.id,
+            'name':       self.name,
             'short_name': self.short_name,
-            'type': self.type,
-            'country': self.country,
-            'district': self.district,
-            'website': self.website,
-            'verified': bool(self.verified),
+            'type':       self.type,
+            'country':    self.country,
+            'district':   self.district,
+            'website':    self.website,
+            'verified':   bool(self.verified),
+            'is_popular': bool(self.is_popular),
+            'sort_order': self.sort_order,
         }
 
 

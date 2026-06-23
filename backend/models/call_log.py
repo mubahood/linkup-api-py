@@ -7,10 +7,10 @@ class CallLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
-    # Participants
-    caller_id = db.Column(db.Integer, db.ForeignKey('admin_users.id'), nullable=False, index=True)
-    callee_id = db.Column(db.Integer, db.ForeignKey('admin_users.id'), nullable=True, index=True)
-    negotiation_id = db.Column(db.Integer, db.ForeignKey('negotiations.id'), nullable=True, index=True)
+    # Participants — UUID strings referencing lu_accounts.id
+    caller_id = db.Column(db.String(36), nullable=False, index=True)
+    callee_id = db.Column(db.String(36), nullable=True, index=True)
+    negotiation_id = db.Column(db.String(36), nullable=True, index=True)
 
     # Call details
     call_type = db.Column(db.String(20), nullable=False, default='voice')  # voice | video

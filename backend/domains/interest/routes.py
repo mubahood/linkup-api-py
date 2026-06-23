@@ -99,6 +99,30 @@ def set_interests(account):
     })
 
 
+@interest_bp.route('/me/<tag_id>', methods=['PUT'])
+@lu_jwt_required
+def update_interest(account, tag_id):
+    """Update a single interest's weight, mode, or pinned status."""
+    ip = InterestProfile.query.filter_by(account_id=account.id, tag_id=tag_id).first()
+    if not ip:
+        return error_response('Interest not found.', status_code=404)
+    data = request.get_json(silent=True) or {}
+    if 'weight' in data:
+        w = float(data['weight'])
+        if not (0.0 <= w <= 1.0):
+            return error_response('weight must be between 0.0 and 1.0')
+        ip.weight = w
+    if 'mode' in data:
+        mode = data['mode']
+        if mode not in ('professional', 'dating', 'both'):
+            return error_response('mode must be professional, dating, or both')
+        ip.mode = mode
+    if 'pinned' in data:
+        ip.pinned = int(bool(data['pinned']))
+    db.session.commit()
+    return success_response('Interest updated.', ip.to_dict())
+
+
 @interest_bp.route('/me/<tag_id>', methods=['DELETE'])
 @lu_jwt_required
 def remove_interest(account, tag_id):

@@ -32,6 +32,7 @@ from flask_socketio import emit
 from backend.models import db
 from backend.models.call_log import CallLog
 from backend.models.user import AdminUser
+from backend.domains.identity.models import Account
 
 
 # ══════════════════════════════════════════════════════════════
@@ -86,19 +87,31 @@ def get_sid_user(sid):
 
 
 def _get_user_info(user_id):
-    """Fetch minimal user info for signaling payloads."""
-    user = db.session.get(AdminUser, user_id)
-    if not user:
-        return {'id': user_id, 'name': 'Unknown', 'avatar': None}
-    return {
-        'id': user.id,
-        'name': user.name or user.username,
-        'avatar': user.avatar,
-    }
+    """Fetch minimal user info for signaling payloads.
+    Supports both UUID (lu_accounts) and legacy integer (admin_users) IDs.
+    """
+    user_id_str = str(user_id)
+    # Try new Account model first (UUID primary key)
+    user = db.session.get(Account, user_id_str)
+    if user:
+        return {
+            'id': user.id,
+            'name': getattr(user, 'display_name', None) or getattr(user, 'handle', None) or 'Member',
+            'avatar': getattr(user, 'avatar', None),
+        }
+    # Fall back to legacy AdminUser (integer primary key)
+    try:
+        legacy = db.session.get(AdminUser, int(user_id_str))
+        if legacy:
+            return {
+                'id': legacy.id,
+                'name': getattr(legacy, 'name', None) or getattr(legacy, 'username', None) or 'Member',
+                'avatar': getattr(legacy, 'avatar', None),
+            }
+    except (ValueError, TypeError):
+        pass
+    return {'id': user_id, 'name': 'Member', 'avatar': None}
 
-
-def _is_participant(negotiation, user_id):
-    return user_id in (negotiation.customer_id, negotiation.driver_id)
 
 
 def _create_call_session(caller_id, callee_id, call_type, call_id=None):
@@ -233,8 +246,19 @@ def register_call_events(socketio, app):
             from flask_jwt_extended import decode_token
             try:
                 decoded = decode_token(token)
-                user_id = int(decoded['sub'])
-                user = db.session.get(AdminUser, user_id)
+                raw_id = decoded['sub']
+                # UUID string → Account; integer string → AdminUser
+                try:
+                    user_id = str(raw_id)
+                    user = db.session.get(Account, user_id)
+                    if not user:
+                        # Try legacy integer ID
+                        user_id = int(raw_id)
+                        user = db.session.get(AdminUser, user_id)
+                        user_id = str(user_id)  # normalise to string
+                except (ValueError, TypeError):
+                    user_id = str(raw_id)
+                    user = db.session.get(Account, user_id)
                 if not user:
                     emit('auth_error', {'error': 'User not found'})
                     return
@@ -249,7 +273,8 @@ def register_call_events(socketio, app):
                 user_sockets[user_id] = sid
                 user_sockets_reverse[sid] = user_id
 
-                print(f'[Call] User {user_id} ({user.name}) authenticated (sid={sid[:8]}...)', flush=True)
+                user_display = getattr(user, 'display_name', None) or getattr(user, 'name', None) or str(user_id)
+                print(f'[Call] User {user_id} ({user_display}) authenticated (sid={sid[:8]}...)', flush=True)
 
                 emit('authenticated', {
                     'user_id': user_id,
@@ -281,19 +306,9 @@ def register_call_events(socketio, app):
             emit('call_error', {'error': 'target_id is required'})
             return
 
-        target_id = int(target_id)
+        target_id = str(target_id)
 
         with app.app_context():
-            # Validate negotiation participation
-            if negotiation_id:
-                neg = db.session.get(Negotiation, int(negotiation_id))
-                if not neg:
-                    emit('call_error', {'error': 'Negotiation not found'})
-                    return
-                if not _is_participant(neg, caller_id) or not _is_participant(neg, target_id):
-                    emit('call_error', {'error': 'Not a participant in this negotiation'})
-                    return
-
             with state_lock:
                 _prune_stale_user_state(caller_id)
                 _prune_stale_user_state(target_id)
@@ -415,7 +430,7 @@ def register_call_events(socketio, app):
         if not caller_id:
             return
 
-        caller_id = int(caller_id)
+        caller_id = str(caller_id)
         caller_sid = get_user_sid(caller_id)
         call_type = data.get('call_type', 'voice')
 
@@ -491,7 +506,7 @@ def register_call_events(socketio, app):
         if not caller_id:
             return
 
-        caller_id = int(caller_id)
+        caller_id = str(caller_id)
         caller_sid = get_user_sid(caller_id)
 
         with app.app_context():
@@ -521,7 +536,7 @@ def register_call_events(socketio, app):
         if not target_id:
             return
 
-        target_sid = get_user_sid(int(target_id))
+        target_sid = get_user_sid(str(target_id))
         if target_sid:
             print(f'[Call] ICE candidate: {user_id} → {target_id}', flush=True)
             emit('ice_candidate', {
@@ -560,7 +575,7 @@ def register_call_events(socketio, app):
 
                 partner_id = None
                 if target_id:
-                    partner_id = int(target_id)
+                    partner_id = str(target_id)
                 elif user_id in active_calls:
                     partner_id = active_calls[user_id]
 
@@ -603,7 +618,7 @@ def register_call_events(socketio, app):
 
         target_id = data.get('target_id')
         if target_id:
-            target_sid = get_user_sid(int(target_id))
+            target_sid = get_user_sid(str(target_id))
             if target_sid:
                 emit('remote_media_state', {
                     'user_id': user_id,
@@ -622,7 +637,7 @@ def register_call_events(socketio, app):
 
         target_id = data.get('target_id')
         if target_id:
-            target_sid = get_user_sid(int(target_id))
+            target_sid = get_user_sid(str(target_id))
             if target_sid:
                 emit('renegotiate_offer', {
                     'from_id': user_id,
@@ -638,7 +653,7 @@ def register_call_events(socketio, app):
 
         target_id = data.get('target_id')
         if target_id:
-            target_sid = get_user_sid(int(target_id))
+            target_sid = get_user_sid(str(target_id))
             if target_sid:
                 emit('renegotiate_answer', {
                     'from_id': user_id,
@@ -704,9 +719,9 @@ def register_call_events(socketio, app):
         """Check if a specific user is currently online."""
         target_id = data.get('user_id')
         if target_id:
-            online = get_user_sid(int(target_id)) is not None
+            online = get_user_sid(str(target_id)) is not None
             emit('user_online_status', {
-                'user_id': int(target_id),
+                'user_id': str(target_id),
                 'online': online,
             })
 

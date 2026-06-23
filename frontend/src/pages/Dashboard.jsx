@@ -5,12 +5,11 @@ import Sidebar from '../components/Sidebar';
 import { FiMenu, FiLogOut, FiUser } from 'react-icons/fi';
 
 const TITLES = {
-  '/': 'Dashboard',
-  '/users': 'Users & Drivers',
-  '/trips': 'Trips',
-  '/negotiations': 'Negotiations',
-  '/bookings': 'Scheduled Bookings',
+  '/':         'Dashboard',
+  '/users':    'Members',
   '/payments': 'Payments',
+  '/wallets':  'Wallets',
+  '/chats':    'Chats',
 };
 
 export default function Dashboard() {
@@ -30,7 +29,7 @@ export default function Dashboard() {
           <h1 className="header-title">{title}</h1>
           <div className="header-user">
             <FiUser className="header-avatar-icon" />
-            <span className="header-username">{user?.name || 'Admin'}</span>
+            <span className="header-username">{user?.display_name || user?.name || 'Admin'}</span>
             <button className="btn-icon" onClick={logout} title="Sign out">
               <FiLogOut />
             </button>

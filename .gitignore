@@ -16,3 +16,4 @@ backend/uploads/documents/*
 vps-credentials.txt
 negoride_db_dump.sql
 .env.production
+.server-credentials

@@ -58,6 +58,65 @@ def register():
         return success_response('OTP sent to your phone.', {'phone': phone})
 
 
+@identity_bp.route('/signup', methods=['POST'])
+def signup():
+    """Direct registration — no OTP.
+    Body: { name|display_name, gender(male|female), email, password, modes_enabled? }.
+    Creates the account, stores the (binary) gender on the dating profile, and
+    returns auth tokens so the app can proceed straight to the optional wizards.
+    """
+    import re
+    data = request.get_json(silent=True) or {}
+    display_name = (data.get('display_name') or data.get('name') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+    password = (data.get('password') or '').strip()
+    gender = (data.get('gender') or '').strip().lower()
+    gender = {'man': 'male', 'woman': 'female'}.get(gender, gender)
+
+    if not display_name:
+        return error_response('Your name is required.')
+    if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return error_response('A valid email is required.')
+    if len(password) < 4:
+        return error_response('Password must be at least 4 characters.')
+    if gender not in ('male', 'female'):
+        return error_response('Please select your gender (male or female).')
+
+    existing = Account.query.filter_by(email=email).filter(
+        Account.deleted_at.is_(None)).first()
+    if existing:
+        return error_response('An account with this email already exists.')
+
+    account = create_account_email(email, display_name)
+    account.set_password(password)
+
+    modes = data.get('modes_enabled')
+    if isinstance(modes, dict):
+        account.modes_enabled = {
+            'professional': bool(modes.get('professional', True)),
+            'sparks': bool(modes.get('sparks', False)),
+        }
+    db.session.commit()
+
+    # Store the binary gender on the dating profile (app-wide source of truth).
+    from backend.domains.profile.models import DatingProfile
+    dp = DatingProfile.query.filter_by(account_id=account.id).first()
+    if not dp:
+        dp = DatingProfile(account_id=account.id)
+        db.session.add(dp)
+    dp.gender = gender
+    db.session.commit()
+
+    tokens = issue_tokens(account)
+    payload = {**account.to_dict(), **tokens, 'is_new_account': True}
+    try:
+        from backend.shared.email.service import send_welcome_email
+        send_welcome_email(account.email, account.display_name, account.handle)
+    except Exception:
+        pass
+    return success_response('Account created.', payload)
+
+
 @identity_bp.route('/otp/request', methods=['POST'])
 @rate_limit(20, 60, body_field='phone')  # per-phone OTP cap (T-API-071)
 def otp_request():

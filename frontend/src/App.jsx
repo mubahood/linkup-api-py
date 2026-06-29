@@ -4,17 +4,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
-const DashboardHome    = lazy(() => import('./components/DashboardHome'));
-const UsersPage        = lazy(() => import('./components/UsersPage'));
-const TripsPage        = lazy(() => import('./components/TripsPage'));
-const NegotiationsPage = lazy(() => import('./components/NegotiationsPage'));
-const BookingsPage     = lazy(() => import('./components/BookingsPage'));
-const PaymentsPage     = lazy(() => import('./components/PaymentsPage'));
-const WalletsPage      = lazy(() => import('./components/WalletsPage'));
-const PayoutsPage      = lazy(() => import('./components/PayoutsPage'));
-const ChatsPage        = lazy(() => import('./components/ChatsPage'));
-const CompaniesPage    = lazy(() => import('./components/CompaniesPage'));
-const RouteStagesPage  = lazy(() => import('./components/RouteStagesPage'));
+const DashboardHome = lazy(() => import('./components/DashboardHome'));
+const AccountsPage  = lazy(() => import('./components/AccountsPage'));
+const ReportsPage   = lazy(() => import('./components/ReportsPage'));
+const HubsPage      = lazy(() => import('./components/HubsPage'));
+const EventsPage    = lazy(() => import('./components/EventsPage'));
 
 const Loader = () => <div className="page-loader">Loading…</div>;
 
@@ -36,16 +30,10 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
         <Route index element={<Suspense fallback={<Loader />}><DashboardHome /></Suspense>} />
-        <Route path="users" element={<Suspense fallback={<Loader />}><UsersPage /></Suspense>} />
-        <Route path="trips" element={<Suspense fallback={<Loader />}><TripsPage /></Suspense>} />
-        <Route path="negotiations" element={<Suspense fallback={<Loader />}><NegotiationsPage /></Suspense>} />
-        <Route path="bookings" element={<Suspense fallback={<Loader />}><BookingsPage /></Suspense>} />
-        <Route path="payments" element={<Suspense fallback={<Loader />}><PaymentsPage /></Suspense>} />
-        <Route path="wallets" element={<Suspense fallback={<Loader />}><WalletsPage /></Suspense>} />
-        <Route path="payouts" element={<Suspense fallback={<Loader />}><PayoutsPage /></Suspense>} />
-        <Route path="chats" element={<Suspense fallback={<Loader />}><ChatsPage /></Suspense>} />
-        <Route path="companies" element={<Suspense fallback={<Loader />}><CompaniesPage /></Suspense>} />
-        <Route path="route-stages" element={<Suspense fallback={<Loader />}><RouteStagesPage /></Suspense>} />
+        <Route path="accounts" element={<Suspense fallback={<Loader />}><AccountsPage /></Suspense>} />
+        <Route path="reports" element={<Suspense fallback={<Loader />}><ReportsPage /></Suspense>} />
+        <Route path="hubs" element={<Suspense fallback={<Loader />}><HubsPage /></Suspense>} />
+        <Route path="events" element={<Suspense fallback={<Loader />}><EventsPage /></Suspense>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -1,17 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  FiHome, FiUsers, FiMessageSquare, FiCreditCard,
-  FiDollarSign, FiMessageCircle, FiBriefcase, FiX,
-  FiTrendingUp, FiHeart, FiSettings,
-} from 'react-icons/fi';
+import { FiHome, FiUsers, FiFlag, FiLayers, FiActivity, FiX } from 'react-icons/fi';
 
 const NAV = [
-  { to: '/',        icon: FiHome,          label: 'Dashboard',       end: true },
-  { to: '/users',   icon: FiUsers,         label: 'Members' },
-  { to: '/payments',icon: FiCreditCard,    label: 'Payments' },
-  { to: '/wallets', icon: FiDollarSign,    label: 'Wallets' },
-  { to: '/chats',   icon: FiMessageCircle, label: 'Chats' },
+  { to: '/',         icon: FiHome,     label: 'Dashboard', end: true },
+  { to: '/accounts', icon: FiUsers,    label: 'Accounts' },
+  { to: '/reports',  icon: FiFlag,     label: 'Reports' },
+  { to: '/hubs',     icon: FiLayers,   label: 'Hubs' },
+  { to: '/events',   icon: FiActivity, label: 'Events' },
 ];
 
 export default function Sidebar({ open, onClose }) {

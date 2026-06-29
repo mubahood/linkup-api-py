@@ -11,7 +11,33 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
+from flask import request, has_request_context
+
 logger = logging.getLogger(__name__)
+
+
+# ─── Multi-app branding ───────────────────────────────────────────────────────
+# The same backend serves multiple apps (LinkUp, Abanoonya Pro). The client
+# identifies itself with an `X-App` header. Branding defaults to LinkUp when the
+# header is absent, so existing LinkUp behaviour is completely unchanged.
+_APP_BRANDS = {
+    'linkup':            'LinkUp',
+    'app.linkup.mobile': 'LinkUp',
+    'abanoonya':         'Abanoonya Pro',
+    'abanoonya.pro':     'Abanoonya Pro',
+    'app.abanoonya.pro': 'Abanoonya Pro',
+}
+
+
+def app_brand(default: str = 'LinkUp') -> str:
+    """Resolve the calling app's display name from the `X-App` request header.
+
+    Must be called inside a request context (resolve it in the route, then pass
+    the resulting string into async email helpers)."""
+    if not has_request_context():
+        return default
+    key = (request.headers.get('X-App') or '').strip().lower()
+    return _APP_BRANDS.get(key, default)
 
 
 # ─── Core send ───────────────────────────────────────────────────────────────
@@ -114,20 +140,20 @@ def send_email_async(to: str, subject: str, body_html: str, body_text: str = '')
 
 # ─── Shared HTML wrapper ──────────────────────────────────────────────────────
 
-def _wrap(title: str, body: str, accent: str = '#1a56db') -> str:
+def _wrap(title: str, body: str, accent: str = '#1a56db', brand: str = 'LinkUp') -> str:
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:16px;background:#f3f4f6;font-family:Arial,sans-serif">
 <div style="max-width:560px;margin:0 auto">
   <div style="background:{accent};padding:24px;border-radius:10px 10px 0 0;text-align:center">
-    <h1 style="color:#fff;margin:0;font-size:26px">LinkUp</h1>
+    <h1 style="color:#fff;margin:0;font-size:26px">{brand}</h1>
     <p style="color:rgba(255,255,255,.7);margin:4px 0 0;font-size:13px">Connect. Grow. Achieve.</p>
   </div>
   <div style="background:#fff;padding:32px;border-radius:0 0 10px 10px;border:1px solid #e5e7eb">
     {body}
     <hr style="border:none;border-top:1px solid #f3f4f6;margin:28px 0 16px">
     <p style="color:#9ca3af;font-size:12px;margin:0">
-      LinkUp · info@mru.ac.ug · Uganda's Professional Network
+      {brand} · info@mru.ac.ug · Uganda
     </p>
   </div>
 </div>
@@ -137,14 +163,17 @@ def _wrap(title: str, body: str, accent: str = '#1a56db') -> str:
 # ─── Email templates ─────────────────────────────────────────────────────────
 
 def send_otp_email(to: str, name: str, code: str, purpose: str = 'login',
-                   sync: bool = False):
+                   sync: bool = False, brand: str = None):
     """Send a one-time-code email. By default fire-and-forget (returns None).
     Pass sync=True to send on the calling thread and get a True/False result
-    (used by password reset so we never claim 'sent' when SMTP actually failed)."""
+    (used by password reset so we never claim 'sent' when SMTP actually failed).
+    `brand` defaults to the calling app's name (X-App header → LinkUp fallback)."""
+    if brand is None:
+        brand = app_brand()  # resolved here, while still in the request context
     label = {'login': 'sign in', 'register': 'verify your account',
              'reset': 'reset your password'}.get(purpose, 'access your account')
-    subject = f'Your LinkUp code: {code}'
-    text = (f"Hi {name},\n\nYour LinkUp one-time code to {label} is:\n\n"
+    subject = f'Your {brand} code: {code}'
+    text = (f"Hi {name},\n\nYour {brand} one-time code to {label} is:\n\n"
             f"    {code}\n\nExpires in 10 minutes. Never share this code.\n")
     html = _wrap('OTP', f"""
       <h2 style="margin-top:0">Verification Code</h2>
@@ -155,31 +184,28 @@ def send_otp_email(to: str, name: str, code: str, purpose: str = 'login',
                   letter-spacing:10px;margin:24px 0">{code}</div>
       <p style="color:#6b7280;font-size:13px">
         ⏱ Expires in <strong>10 minutes</strong>.<br>
-        Never share this code with anyone — LinkUp staff will never ask for it.
+        Never share this code with anyone — {brand} staff will never ask for it.
       </p>
-    """)
+    """, brand=brand)
     if sync:
         return send_email(to, subject, html, text)
     send_email_async(to, subject, html, text)
     return None
 
 
-def send_welcome_email(to: str, name: str, handle: str) -> None:
-    subject = f'Welcome to LinkUp, {name}! 🎉'
-    text = (f"Hi {name},\n\nWelcome to LinkUp! Your handle is @{handle}.\n\n"
-            f"Next steps: complete your profile, connect with colleagues, join hubs.\n\n"
-            f"The LinkUp Team\n")
+def send_welcome_email(to: str, name: str, handle: str, brand: str = None) -> None:
+    if brand is None:
+        brand = app_brand()
+    subject = f'Welcome to {brand}, {name}! 🎉'
+    text = (f"Hi {name},\n\nWelcome to {brand}! Your handle is @{handle}.\n\n"
+            f"Next steps: complete your profile and start connecting.\n\n"
+            f"The {brand} Team\n")
     html = _wrap('Welcome', f"""
-      <h2 style="margin-top:0">Welcome to LinkUp, {name}! 🎉</h2>
+      <h2 style="margin-top:0">Welcome to {brand}, {name}! 🎉</h2>
       <p>Your account is live. Your handle is <strong>@{handle}</strong>.</p>
-      <h3>Get started in 3 steps:</h3>
-      <ol>
-        <li><strong>Complete your profile</strong> — add education, work experience, and a photo</li>
-        <li><strong>Connect</strong> — link with colleagues, classmates, and industry peers</li>
-        <li><strong>Discover</strong> — join hubs, browse jobs, and explore events near you</li>
-      </ol>
+      <p>Complete your profile and start connecting.</p>
       <p>Questions? Reply to this email — we read every message.</p>
-    """)
+    """, brand=brand)
     send_email_async(to, subject, html, text)
 
 
@@ -202,13 +228,16 @@ def send_kyc_email(to: str, name: str, level: int) -> None:
     send_email_async(to, subject, html, text)
 
 
-def send_account_status_email(to: str, name: str, status: str, reason: str = '') -> None:
+def send_account_status_email(to: str, name: str, status: str, reason: str = '',
+                              brand: str = None) -> None:
+    if brand is None:
+        brand = app_brand()
     cfg_map = {
         'suspended': ('#dc2626', 'Your account has been suspended',
                       reason or 'Your account was suspended for violating our community guidelines.',
                       'If you believe this is an error, reply to this email.'),
         'active':    ('#16a34a', 'Your account has been reinstated',
-                      'Good news — your LinkUp account is active again.', 'Welcome back!'),
+                      f'Good news — your {brand} account is active again.', 'Welcome back!'),
         'closed':    ('#6b7280', 'Your account has been closed',
                       reason or 'Your account has been permanently closed.',
                       'Contact support if you have questions.'),
@@ -216,14 +245,14 @@ def send_account_status_email(to: str, name: str, status: str, reason: str = '')
     accent, subject_line, body_main, body_sub = cfg_map.get(status, (
         '#1a56db', f'Account Status: {status}', f'Your account status is now {status}.', ''
     ))
-    subject = f'LinkUp: {subject_line}'
-    text = f"Hi {name},\n\n{body_main}\n{body_sub}\n\nThe LinkUp Team\n"
+    subject = f'{brand}: {subject_line}'
+    text = f"Hi {name},\n\n{body_main}\n{body_sub}\n\nThe {brand} Team\n"
     html = _wrap('Account Update', f"""
       <h2 style="margin-top:0;color:{accent}">{subject_line}</h2>
       <p>Hi <strong>{name}</strong>,</p>
       <p>{body_main}</p>
       <p>{body_sub}</p>
-    """, accent=accent)
+    """, accent=accent, brand=brand)
     send_email_async(to, subject, html, text)
 
 

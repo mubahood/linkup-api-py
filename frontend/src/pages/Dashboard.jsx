@@ -6,10 +6,10 @@ import { FiMenu, FiLogOut, FiUser } from 'react-icons/fi';
 
 const TITLES = {
   '/':         'Dashboard',
-  '/users':    'Members',
-  '/payments': 'Payments',
-  '/wallets':  'Wallets',
-  '/chats':    'Chats',
+  '/accounts': 'Accounts',
+  '/reports':  'Reports',
+  '/hubs':     'Hubs',
+  '/events':   'Events',
 };
 
 export default function Dashboard() {

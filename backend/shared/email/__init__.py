@@ -1,3 +1,3 @@
-from backend.shared.email.service import send_email, send_otp_email
+from backend.shared.email.service import send_email, send_otp_email, app_brand
 
-__all__ = ['send_email', 'send_otp_email']
+__all__ = ['send_email', 'send_otp_email', 'app_brand']

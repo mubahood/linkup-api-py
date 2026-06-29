@@ -1,85 +1,104 @@
 import React, { useEffect, useState } from 'react';
-import { adminAPI } from '../services/api';
-import { FiUsers, FiNavigation, FiDollarSign, FiClock } from 'react-icons/fi';
+import { adminAPI, dataOf } from '../services/api';
+import {
+  FiUsers, FiUserCheck, FiStar, FiUserPlus, FiSlash,
+  FiLayers, FiFileText, FiBriefcase, FiCalendar, FiHeart, FiLink2,
+  FiFlag, FiAlertTriangle, FiRefreshCw,
+} from 'react-icons/fi';
+
+const card = {
+  background: '#fff', border: '1px solid #ececf1', borderRadius: 10,
+  padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14,
+};
+const iconWrap = (c) => ({
+  width: 42, height: 42, borderRadius: 10, display: 'grid', placeItems: 'center',
+  background: `${c}14`, color: c, flexShrink: 0,
+});
+
+function Stat({ icon: Icon, label, value, color }) {
+  return (
+    <div style={card}>
+      <div style={iconWrap(color)}><Icon size={20} /></div>
+      <div>
+        <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>
+          {value ?? '—'}
+        </div>
+        <div style={{ fontSize: 12.5, color: '#6b6b76', marginTop: 2 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.6,
+        color: '#8a8a93', margin: '0 0 12px', fontWeight: 700 }}>{title}</h3>
+      <div style={{ display: 'grid', gap: 14,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardHome() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
-    adminAPI.dashboard()
-      .then(({ data }) => {
-        if (data.code === 1) setStats(data.data);
-        else setError(data.message || 'Failed to load dashboard');
-      })
-      .catch((err) => {
-        if (err.response?.status !== 401) setError('Unable to connect to server');
-      })
-      .finally(() => setLoading(false));
+  const load = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await adminAPI.stats();
+      setStats(dataOf(res));
+    } catch (e) {
+      setError(e.response?.data?.message || 'Could not load stats.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
 
-  if (loading) return <div className="page-loader">Loading dashboard…</div>;
-  if (error) return <div className="page-loader"><span>{error}</span> <button className="btn btn-sm" onClick={load} style={{marginLeft:8}}>Retry</button></div>;
+  if (loading) return <div className="page-loader">Loading…</div>;
+  if (error) {
+    return (
+      <div style={{ padding: 24 }}>
+        <p style={{ color: '#DC2626' }}>{error}</p>
+        <button className="btn" onClick={load}><FiRefreshCw /> Retry</button>
+      </div>
+    );
+  }
 
-  const cards = [
-    { label: 'Total Users',       value: stats?.total_users ?? '—',       icon: FiUsers,      iconClass: 'stat-icon--accent' },
-    { label: 'Active Trips',      value: stats?.active_trips ?? '—',      icon: FiNavigation,  iconClass: 'stat-icon--success' },
-    { label: 'Total Revenue',     value: stats?.total_revenue != null ? `$${Number(stats.total_revenue).toFixed(2)}` : '—', icon: FiDollarSign, iconClass: 'stat-icon--warning' },
-    { label: 'Pending Bookings',  value: stats?.pending_bookings ?? '—',  icon: FiClock,       iconClass: 'stat-icon--error' },
-  ];
+  const a = stats?.accounts || {};
+  const c = stats?.content || {};
+  const m = stats?.moderation || {};
 
   return (
-    <div className="dashboard-home">
-      <div className="stat-cards">
-        {cards.map((c) => (
-          <div key={c.label} className="stat-card">
-            <div className={`stat-icon ${c.iconClass}`}><c.icon /></div>
-            <div className="stat-info">
-              <span className="stat-value">{c.value}</span>
-              <span className="stat-label">{c.label}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div style={{ padding: 4 }}>
+      <Section title="Accounts">
+        <Stat icon={FiUsers}     label="Total accounts"   value={a.total}         color="#7C3AED" />
+        <Stat icon={FiUserCheck} label="Active"           value={a.active}        color="#059669" />
+        <Stat icon={FiStar}      label="Premium"          value={a.premium}       color="#B45309" />
+        <Stat icon={FiUserPlus}  label="New today"        value={a.new_today}     color="#2563EB" />
+        <Stat icon={FiUserPlus}  label="New this week"    value={a.new_this_week} color="#0891B2" />
+        <Stat icon={FiSlash}     label="Suspended"        value={a.suspended}     color="#DC2626" />
+      </Section>
 
-      <div className="dashboard-sections">
-        <div className="section-card">
-          <h3>Recent Activity</h3>
-          {stats?.recent_trips?.length ? (
-            <table className="data-table">
-              <thead><tr><th>ID</th><th>From</th><th>To</th><th>Status</th><th>Date</th></tr></thead>
-              <tbody>
-                {stats.recent_trips.map((t) => (
-                  <tr key={t.id}>
-                    <td>#{t.id}</td>
-                    <td>{t.start_name || '—'}</td>
-                    <td>{t.end_name || '—'}</td>
-                    <td><span className={`badge badge-${t.status}`}>{t.status}</span></td>
-                    <td>{t.created_at?.slice(0, 10)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="empty-state">No recent trips</p>
-          )}
-        </div>
+      <Section title="Content">
+        <Stat icon={FiLayers}    label="Hubs"        value={c.hubs}      color="#7C3AED" />
+        <Stat icon={FiFileText}  label="Hub posts"   value={c.hub_posts} color="#4F46E5" />
+        <Stat icon={FiBriefcase} label="Open jobs"   value={c.jobs_open} color="#0891B2" />
+        <Stat icon={FiCalendar}  label="Events"      value={c.events}    color="#2563EB" />
+        <Stat icon={FiHeart}     label="Matches"     value={c.matches}   color="#DB2777" />
+        <Stat icon={FiLink2}     label="Links"       value={c.links}     color="#059669" />
+      </Section>
 
-        <div className="section-card">
-          <h3>Quick Stats</h3>
-          <div className="quick-stats">
-            <div className="qs-row"><span>Approved Drivers</span><span>{stats?.approved_drivers ?? '—'}</span></div>
-            <div className="qs-row"><span>Pending Drivers</span><span>{stats?.pending_drivers ?? '—'}</span></div>
-            <div className="qs-row"><span>Online Drivers</span><span>{stats?.online_drivers ?? '—'}</span></div>
-            <div className="qs-row"><span>Completed Trips</span><span>{stats?.completed_trips ?? '—'}</span></div>
-          </div>
-        </div>
-      </div>
+      <Section title="Moderation">
+        <Stat icon={FiFlag}          label="Pending reports" value={m.pending_reports} color="#DC2626" />
+        <Stat icon={FiAlertTriangle} label="Total reports"   value={m.total_reports}   color="#B45309" />
+      </Section>
     </div>
   );
 }

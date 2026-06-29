@@ -147,13 +147,11 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Footer hint */}
+        {/* Footer */}
         <div className="lu-login-footer">
-          <span>samuel-ocen</span>
+          <span>LinkUp Admin</span>
           <span className="lu-dot" />
-          <span>+256700000001</span>
-          <span className="lu-dot" />
-          <span>111111</span>
+          <span>Authorized access only</span>
         </div>
       </div>
     </div>

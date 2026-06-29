@@ -16,5 +16,6 @@ backend/uploads/documents/*
 vps-credentials.txt
 negoride_db_dump.sql
 .env.production
-.server-credentialsbackend/uploads/gallery/*
+.server-credentials
+backend/uploads/gallery/*
 backend/uploads/photos/*

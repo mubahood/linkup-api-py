@@ -32,9 +32,16 @@ SOURCE_REGISTRY = {
         'label': 'EuroGirlsEscort (Uganda)',
         'base_url': 'https://www.eurogirlsescort.com/escorts/uganda/',
         'mechanism': 'pagination',
-        'status': 'discovery_only',
-        'parser_version': 'eurogirlsescort-v1',
-        'crawl_delay_seconds': 5,  # matches published robots.txt Crawl-delay (checked 2026-08-27)
+        # robots.txt itself is permissive (Crawl-delay: 5, no Disallow), but the
+        # site sits behind Cloudflare and returned an explicit "Sorry, you have
+        # been blocked" challenge page (HTTP 403) to a single, honestly
+        # self-identifying request (checked 2026-08-27). That's an active
+        # anti-bot control, not an accident — do not retry with a different
+        # User-Agent, headless browser, or any other technique to get past it.
+        # See plan §0.1 / Phase 3.
+        'status': 'unavailable',
+        'parser_version': None,
+        'crawl_delay_seconds': None,
     },
     'ugandahotgirls': {
         'label': 'UgandaHotGirls',

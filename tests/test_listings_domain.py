@@ -16,7 +16,15 @@ from backend.models import db
 from backend.domains.identity.models import Account
 from backend.domains.listings.models import SourceListing, SourceCrawl
 from backend.domains.listings.adapters.base import DiscoveredListing
-from backend.domains.listings.service import ListingService
+from backend.domains.listings.service import ListingService, SOURCE_REGISTRY
+
+# Both real-world sources are 'unavailable' as of 2026-08-27 (ugandahotgirls:
+# robots.txt connection reset; eurogirlsescort: active Cloudflare block — see
+# PROFILE_CLAIM_IMPORTER_PLAN.md §0.1/Phase 3). The upsert/dedup/pagination
+# *mechanism* is independent of which real sources currently pass the
+# accessibility gate, so these tests exercise it against a registered fixture
+# source rather than asserting a real source is reachable when it isn't.
+FIXTURE_SOURCE = 'test_fixture_source'
 
 
 class ListingsDiscoveryServiceTests(unittest.TestCase):
@@ -32,8 +40,17 @@ class ListingsDiscoveryServiceTests(unittest.TestCase):
 
     def setUp(self):
         self.created_listing_ids = []
+        SOURCE_REGISTRY[FIXTURE_SOURCE] = {
+            'label': 'Fixture Source (tests only)',
+            'base_url': 'https://example.com/',
+            'mechanism': 'pagination',
+            'status': 'discovery_only',
+            'parser_version': 'test_fixture_source-v1',
+            'crawl_delay_seconds': 0,
+        }
 
     def tearDown(self):
+        SOURCE_REGISTRY.pop(FIXTURE_SOURCE, None)
         if self.created_listing_ids:
             SourceListing.query.filter(
                 SourceListing.id.in_(self.created_listing_ids)
@@ -43,19 +60,19 @@ class ListingsDiscoveryServiceTests(unittest.TestCase):
     def _discovered(self, external_id, location_text='Kampala'):
         return DiscoveredListing(
             external_id=external_id,
-            source_url=f'https://www.eurogirlsescort.com/escort/{external_id}/',
-            canonical_url=f'https://www.eurogirlsescort.com/escort/{external_id}/',
+            source_url=f'https://example.com/listing/{external_id}/',
+            canonical_url=f'https://example.com/listing/{external_id}/',
             location_text=location_text,
         )
 
     def test_record_discovered_creates_new_row(self):
         external_id = f'test-{uuid.uuid4().hex[:8]}'
-        row, created = ListingService.record_discovered('eurogirlsescort', self._discovered(external_id))
+        row, created = ListingService.record_discovered(FIXTURE_SOURCE, self._discovered(external_id))
         self.created_listing_ids.append(row.id)
 
         self.assertTrue(created)
         self.assertEqual(row.claim_status, 'discovered')
-        self.assertEqual(row.parser_version, 'eurogirlsescort-v1')
+        self.assertEqual(row.parser_version, 'test_fixture_source-v1')
         # Discovery must never persist identifying content — assert the
         # model has nowhere to put it, not just that we didn't set it.
         self.assertFalse(hasattr(row, 'display_name'))
@@ -64,15 +81,15 @@ class ListingsDiscoveryServiceTests(unittest.TestCase):
 
     def test_record_discovered_is_idempotent(self):
         external_id = f'test-{uuid.uuid4().hex[:8]}'
-        row1, created1 = ListingService.record_discovered('eurogirlsescort', self._discovered(external_id))
+        row1, created1 = ListingService.record_discovered(FIXTURE_SOURCE, self._discovered(external_id))
         self.created_listing_ids.append(row1.id)
-        row2, created2 = ListingService.record_discovered('eurogirlsescort', self._discovered(external_id))
+        row2, created2 = ListingService.record_discovered(FIXTURE_SOURCE, self._discovered(external_id))
 
         self.assertTrue(created1)
         self.assertFalse(created2)
         self.assertEqual(row1.id, row2.id)
 
-        count = SourceListing.query.filter_by(source='eurogirlsescort', external_id=external_id).count()
+        count = SourceListing.query.filter_by(source=FIXTURE_SOURCE, external_id=external_id).count()
         self.assertEqual(count, 1)
 
         # Re-discovery bumps last_checked_at rather than touching anything else.
@@ -82,19 +99,24 @@ class ListingsDiscoveryServiceTests(unittest.TestCase):
         external_id = f'test-{uuid.uuid4().hex[:8]}'
         last_row = None
         for _ in range(10):
-            last_row, _ = ListingService.record_discovered('eurogirlsescort', self._discovered(external_id))
+            last_row, _ = ListingService.record_discovered(FIXTURE_SOURCE, self._discovered(external_id))
         self.created_listing_ids.append(last_row.id)
 
-        count = SourceListing.query.filter_by(source='eurogirlsescort', external_id=external_id).count()
+        count = SourceListing.query.filter_by(source=FIXTURE_SOURCE, external_id=external_id).count()
         self.assertEqual(count, 1)
 
     def test_unavailable_source_is_rejected(self):
-        external_id = f'test-{uuid.uuid4().hex[:8]}'
-        with self.assertRaises(ValueError):
-            ListingService.record_discovered('ugandahotgirls', self._discovered(external_id))
+        """Both real-world sources are currently unavailable — ugandahotgirls
+        (robots.txt connection reset) and eurogirlsescort (active Cloudflare
+        block). Confirms record_discovered refuses both, for their own
+        documented reasons, not just one."""
+        for source in ('ugandahotgirls', 'eurogirlsescort'):
+            external_id = f'test-{uuid.uuid4().hex[:8]}'
+            with self.assertRaises(ValueError):
+                ListingService.record_discovered(source, self._discovered(external_id))
 
-        count = SourceListing.query.filter_by(source='ugandahotgirls', external_id=external_id).count()
-        self.assertEqual(count, 0)
+            count = SourceListing.query.filter_by(source=source, external_id=external_id).count()
+            self.assertEqual(count, 0)
 
     def test_unknown_source_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -106,45 +128,47 @@ class ListingsDiscoveryServiceTests(unittest.TestCase):
         entirely) must still fail and must not corrupt the session."""
         external_id = f'test-{uuid.uuid4().hex[:8]}'
         row1 = SourceListing(
-            source='eurogirlsescort', external_id=external_id,
+            source=FIXTURE_SOURCE, external_id=external_id,
             source_url='https://example.com/a', canonical_url='https://example.com/a',
-            claim_status='discovered', parser_version='eurogirlsescort-v1',
+            claim_status='discovered', parser_version='test_fixture_source-v1',
         )
         db.session.add(row1)
         db.session.commit()
         self.created_listing_ids.append(row1.id)
 
         row2 = SourceListing(
-            source='eurogirlsescort', external_id=external_id,
+            source=FIXTURE_SOURCE, external_id=external_id,
             source_url='https://example.com/b', canonical_url='https://example.com/b',
-            claim_status='discovered', parser_version='eurogirlsescort-v1',
+            claim_status='discovered', parser_version='test_fixture_source-v1',
         )
         db.session.add(row2)
         with self.assertRaises(Exception):
             db.session.commit()
         db.session.rollback()
 
-        count = SourceListing.query.filter_by(source='eurogirlsescort', external_id=external_id).count()
+        count = SourceListing.query.filter_by(source=FIXTURE_SOURCE, external_id=external_id).count()
         self.assertEqual(count, 1)
 
     def test_list_sources_reports_both_configured_sources(self):
         sources = {s['source']: s for s in ListingService.list_sources()}
         self.assertIn('eurogirlsescort', sources)
         self.assertIn('ugandahotgirls', sources)
-        self.assertEqual(sources['eurogirlsescort']['status'], 'discovery_only')
+        # Both real sources are unavailable as of 2026-08-27 — see the
+        # SOURCE_REGISTRY comments in service.py for why each one is blocked.
+        self.assertEqual(sources['eurogirlsescort']['status'], 'unavailable')
         self.assertEqual(sources['ugandahotgirls']['status'], 'unavailable')
 
     def test_list_discovered_pagination_and_filters(self):
         ids = []
         for i in range(3):
             row, _ = ListingService.record_discovered(
-                'eurogirlsescort', self._discovered(f'page-test-{uuid.uuid4().hex[:8]}')
+                FIXTURE_SOURCE, self._discovered(f'page-test-{uuid.uuid4().hex[:8]}')
             )
             ids.append(row.id)
         self.created_listing_ids.extend(ids)
 
         items, total, page, last_page, per_page = ListingService.list_discovered(
-            source='eurogirlsescort', page=1, per_page=2,
+            source=FIXTURE_SOURCE, page=1, per_page=2,
         )
         self.assertGreaterEqual(total, 3)
         self.assertEqual(len(items), 2)

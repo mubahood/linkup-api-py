@@ -160,9 +160,24 @@ Still blocked: both discovery adapters (§0.1). Not started: Phase 7
 `fetch_authorized_content()`, so it's blocked on the same thing), Phase 8
 (media/gallery handling beyond the single liveness capture), Phase 9 beyond
 what Phase 1-2 already covers, Phase 10 (takedown/suppression), Phase
-11-13 (admin dashboard UI, scheduling, monitoring). No frontend/mobile UI
-was built for any of this — it's the backend API surface only, matching how
-Phase 1-2 was scoped.
+12-13 (scheduling, monitoring).
+
+**Phase 11 (Admin Dashboard) — partial, DONE for what currently exists,
+deployed 2026-08-27.** A `/listings` page was added to the admin console:
+Sources (read-only, shows each source's live discovery/crawl stats plus the
+human-readable `notes` explaining why it's unavailable), Discovered
+(paginated, filterable by claim status), and Claims (review a liveness
+capture, approve/reject, reject a claim outright). No control in this UI can
+authorize a claim — the review-liveness button only ever posts one of the
+two required verification events, matching the backend's
+`ADMIN_ALLOWED_TRANSITIONS` guarantee. There is no crawl-trigger control yet
+(nothing to trigger — Phase 12), and no takedown/suppression control yet
+(Phase 10 isn't built). Verified against a real local backend + browser
+(Playwright, used as a one-off check, not added as a project dependency):
+all three tabs render correctly against live data, and the full claim flow
+end-to-end through the actual UI (start → OTP → liveness upload → admin
+review → reject) works, with the two-factor invariant visibly holding —
+approving liveness alone leaves a claim at `verification_pending`.
 
 ---
 

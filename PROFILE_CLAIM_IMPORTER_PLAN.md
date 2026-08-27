@@ -108,6 +108,62 @@ technically):
 (connection reset on `robots.txt`, not yet independently re-verified by a
 human as requested in the original §0.1 gate).
 
+**Phase 4-6 (Claim System, Verification, Authorization State Machine) — DONE,
+verified locally, deployed to production (2026-08-27).** Built source-agnostic
+of which crawler source is available — these phases operate on `SourceListing`
+rows however they got there, and don't touch the blocked sources at all.
+
+- Migration `0039_listing_claims` — `lu_listing_claims` +
+  `lu_claim_verification_events`.
+- Migration `0040_otp_purpose_listing_claim` — widens the *existing*
+  `lu_otp_requests.purpose` column, which turned out to be a MySQL ENUM
+  (`register`/`login`/`reset`/`verify`) at the schema level even though the
+  SQLAlchemy model just declares `String(20)`. Caught by running real tests
+  against the real local DB (`Data truncated for column 'purpose'`), not by
+  inspection — reinforces why every phase runs its tests against a live DB,
+  not mocks.
+- `claim_service.py`: `start_claim` (idempotent per listing — a second claim
+  attempt on the same listing returns the existing one, not a duplicate),
+  `request_otp`/`verify_otp_step` (reuses the existing
+  `identity.service.create_otp/verify_otp`, purpose=`listing_claim`),
+  `submit_liveness_capture` (claimant's own in-app upload, via the existing
+  `shared.storage.save_upload` — not scraped content, so storing it
+  immediately is fine), `admin_review_liveness` (v1 manual visual check, per
+  plan §5.3 — one of two required factors, never authorizes alone),
+  `_try_authorize` (the *only* place `authorized_at`/`status='authorized'`
+  gets set — requires both an `otp`-passed and a `liveness_match`-passed
+  event, checked by querying events fresh each time so it works regardless of
+  which factor completes first), `admin_transition` (the only admin-facing
+  status-change path, gated by `ADMIN_ALLOWED_TRANSITIONS` — `'authorized'`
+  does not appear as a destination in that set under any starting status).
+- Routes: public `claim_routes.py` (`/v1/listings/search`,
+  `/v1/listings/claims*` — unauthenticated by design, since the claimant has
+  no LinkUp account yet; secured by the claim_id itself being an unguessable
+  UUID, the same capability-token model as a magic link) and admin additions
+  to `routes.py` (`/v1/admin/listings/claims*` — list, review-liveness,
+  transition).
+- 29 tests total (17 new for Phase 4-6), including the security-critical
+  ones: authorization is unreachable via either factor alone, in either
+  completion order; a failed liveness review blocks authorization even with
+  OTP already passed; `ADMIN_ALLOWED_TRANSITIONS` structurally excludes
+  `'authorized'` as a destination; the actual HTTP transition route rejects
+  `{"status": "authorized"}` with 400; public search never leaks
+  `source_url`.
+- Deployed via the same rsync-additive-files + hand-patch-shared-files
+  pattern as Phase 1-2 (re-diffed `app.py`/`models/__init__.py` against live
+  content again before patching — do not assume the last deploy's patch
+  context still holds). Verified live: `/v1/health` OK, clean gunicorn
+  restart with no import traceback, new routes present.
+
+Still blocked: both discovery adapters (§0.1). Not started: Phase 7
+(post-authorization import — needs a working adapter's
+`fetch_authorized_content()`, so it's blocked on the same thing), Phase 8
+(media/gallery handling beyond the single liveness capture), Phase 9 beyond
+what Phase 1-2 already covers, Phase 10 (takedown/suppression), Phase
+11-13 (admin dashboard UI, scheduling, monitoring). No frontend/mobile UI
+was built for any of this — it's the backend API surface only, matching how
+Phase 1-2 was scoped.
+
 ---
 
 ## 0. What this system is (and isn't)

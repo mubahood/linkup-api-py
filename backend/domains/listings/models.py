@@ -59,6 +59,72 @@ class SourceListing(db.Model):
         return data
 
 
+class ListingClaim(db.Model):
+    __tablename__ = 'lu_listing_claims'
+
+    # No status here is admin-settable in isolation to 'authorized' — that
+    # transition is system_only, enforced in ListingClaimService, not by a
+    # constraint on this set. See plan §6.
+    VALID_STATUSES = {
+        'claim_requested', 'verification_pending', 'verified', 'authorized',
+        'importing', 'imported', 'user_review', 'published', 'rejected',
+        'removal_requested', 'removed',
+    }
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source_listing_id = db.Column(
+        db.String(36), db.ForeignKey('lu_source_listings.id', ondelete='CASCADE'), nullable=False
+    )
+    claimant_phone = db.Column(db.String(30), nullable=True)
+    claimant_account_id = db.Column(db.String(36), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='claim_requested')
+    liveness_capture_path = db.Column(db.String(500), nullable=True)
+    liveness_reviewed_by = db.Column(db.String(36), nullable=True)
+    authorized_at = db.Column(db.DateTime, nullable=True)
+    authorization_event_id = db.Column(db.String(36), nullable=True)
+    rejected_reason = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    listing = db.relationship('SourceListing', foreign_keys=[source_listing_id], lazy='joined')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'source_listing_id': self.source_listing_id,
+            'status': self.status,
+            'liveness_capture_path': self.liveness_capture_path,
+            'liveness_reviewed_by': self.liveness_reviewed_by,
+            'authorized_at': self.authorized_at.isoformat() if self.authorized_at else None,
+            'rejected_reason': self.rejected_reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ClaimVerificationEvent(db.Model):
+    __tablename__ = 'lu_claim_verification_events'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    claim_id = db.Column(db.String(36), db.ForeignKey('lu_listing_claims.id', ondelete='CASCADE'), nullable=False)
+    method = db.Column(db.String(30), nullable=False)  # 'otp' | 'liveness_match'
+    result = db.Column(db.String(20), nullable=False)  # 'passed' | 'failed'
+    confidence = db.Column(db.Numeric(5, 2), nullable=True)
+    notes = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'claim_id': self.claim_id,
+            'method': self.method,
+            'result': self.result,
+            'confidence': float(self.confidence) if self.confidence is not None else None,
+            'notes': self.notes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class SourceCrawl(db.Model):
     __tablename__ = 'lu_source_crawls'
 

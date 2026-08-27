@@ -128,6 +128,7 @@ def create_app():
     from backend.domains.photos.routes import photos_bp
     from backend.domains.posts.routes import posts_bp
     from backend.domains.listings.routes import listings_bp
+    from backend.domains.listings.claim_routes import listing_claims_bp
 
     app.register_blueprint(identity_bp)
     app.register_blueprint(v1_profile_bp)
@@ -151,6 +152,7 @@ def create_app():
     app.register_blueprint(photos_bp)
     app.register_blueprint(posts_bp)
     app.register_blueprint(listings_bp)
+    app.register_blueprint(listing_claims_bp)
 
     # Register Socket.IO call signaling events
     from backend.sockets.call_events import register_call_events

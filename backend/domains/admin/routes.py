@@ -172,6 +172,141 @@ def list_accounts(account):
     )
 
 
+# Fields an admin may set on the nested profiles at creation time — a
+# whitelist so the request body can't mass-assign arbitrary columns.
+_DATING_PROFILE_FIELDS = {
+    'bio', 'gender', 'looking_for_gender', 'sexual_orientation', 'birth_year',
+    'relationship_goal', 'intent', 'height_cm', 'body_type', 'smoking',
+    'drinking', 'marijuana', 'diet', 'exercise', 'education_level',
+    'religion', 'religiosity', 'tribe_ethnicity', 'politics', 'industry',
+    'languages_spoken', 'zodiac', 'personality_type', 'communication_style',
+    'has_children', 'wants_children', 'country_code', 'district_id',
+    'max_distance_km',
+}
+_PROFESSIONAL_PROFILE_FIELDS = {
+    'headline', 'bio', 'seniority', 'current_role', 'industry',
+    'years_experience', 'pronouns', 'tagline', 'availability_status',
+}
+
+
+def _generate_password(length=12):
+    import secrets as _secrets
+    import string as _string
+    alphabet = _string.ascii_letters + _string.digits
+    return ''.join(_secrets.choice(alphabet) for _ in range(length))
+
+
+def _apply_whitelisted_fields(instance, data, allowed_fields):
+    for field in allowed_fields:
+        if field in data:
+            setattr(instance, field, data[field])
+
+
+@admin_v1_bp.route('/accounts', methods=['POST'])
+@_admin_required
+def create_account_admin(account):
+    """
+    Admin-created account with an optional complete profile in one request.
+
+    Body: display_name (required), handle?, phone?, email?, password?,
+    app_id? ('linkup'|'abanoonya', default 'linkup'), is_premium?,
+    modes?: {professional?, sparks?}, dating_profile?: {...}, professional_profile?: {...}
+
+    At least one of phone/email is required — mirrors real signup, since an
+    account needs a way to log in. If password is omitted, one is generated
+    and returned ONCE in this response's `generated_password` — never
+    logged, never retrievable afterward (matches the project's standing rule
+    against ever using a fixed/shared default password).
+    """
+    data = request.get_json(silent=True) or {}
+    display_name = (data.get('display_name') or '').strip()
+    phone = (data.get('phone') or '').strip() or None
+    email = (data.get('email') or '').strip().lower() or None
+    handle = (data.get('handle') or '').strip().lower() or None
+
+    if not display_name:
+        return error_response('display_name is required.', status_code=400)
+    if len(display_name) > 200:
+        return error_response('display_name is too long (max 200 characters).', status_code=400)
+    if not phone and not email:
+        return error_response('At least one of phone or email is required.', status_code=400)
+
+    if phone and Account.query.filter_by(phone=phone).first():
+        return error_response('An account with that phone number already exists.', status_code=400)
+    if email and Account.query.filter_by(email=email).first():
+        return error_response('An account with that email already exists.', status_code=400)
+
+    from backend.domains.identity.service import generate_handle
+    if handle:
+        if Account.query.filter_by(handle=handle).first():
+            return error_response('That handle is already taken.', status_code=400)
+    else:
+        handle = generate_handle(display_name, phone or email)
+
+    app_id = (data.get('app_id') or 'linkup').strip()
+    if app_id not in ('linkup', 'abanoonya'):
+        return error_response('app_id must be linkup or abanoonya.', status_code=400)
+
+    modes_in = data.get('modes') or {}
+    modes_enabled = {
+        'professional': bool(modes_in.get('professional', app_id != 'abanoonya')),
+        'sparks': bool(modes_in.get('sparks', app_id == 'abanoonya')),
+    }
+
+    password = (data.get('password') or '').strip()
+    generated_password = None
+    if not password:
+        password = _generate_password()
+        generated_password = password
+    elif len(password) < 6:
+        return error_response('Password must be at least 6 characters.', status_code=400)
+
+    new_account = Account(
+        handle=handle,
+        display_name=display_name,
+        phone=phone,
+        email=email,
+        phone_verified=1 if phone else 0,
+        email_verified=1 if email else 0,
+        app_id=app_id,
+        modes_enabled=modes_enabled,
+        account_status='active',
+        is_premium=1 if data.get('is_premium') else 0,
+        avatar=(data.get('avatar') or '').strip() or None,
+    )
+    new_account.set_password(password)
+    db.session.add(new_account)
+    db.session.flush()  # assigns new_account.id before the profile rows reference it
+
+    dp_data = data.get('dating_profile')
+    if modes_enabled['sparks'] and dp_data:
+        from backend.domains.profile.models import DatingProfile
+        from backend.domains.reference.models import Location
+        dp = DatingProfile(account_id=new_account.id, display_name=display_name)
+        _apply_whitelisted_fields(dp, dp_data, _DATING_PROFILE_FIELDS)
+        # Derive region_id from the chosen district so the profile is
+        # genuinely complete without asking the admin to pick both.
+        if dp.district_id and not dp.region_id:
+            district = db.session.get(Location, dp.district_id)
+            if district and district.parent_id:
+                dp.region_id = district.parent_id
+        db.session.add(dp)
+
+    pp_data = data.get('professional_profile')
+    if modes_enabled['professional'] and pp_data:
+        from backend.domains.profile.models import ProfessionalProfile
+        pp = ProfessionalProfile(account_id=new_account.id)
+        _apply_whitelisted_fields(pp, pp_data, _PROFESSIONAL_PROFILE_FIELDS)
+        db.session.add(pp)
+
+    db.session.commit()
+
+    result = new_account.to_dict()
+    if generated_password:
+        result['generated_password'] = generated_password
+    return success_response('Account created.', result, status_code=201)
+
+
 @admin_v1_bp.route('/accounts/<account_id>', methods=['GET'])
 @_admin_required
 def get_account(account, account_id):

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiCheck as FiCheckIcon } from 'react-icons/fi';
 
 const STATUS = {
   active:    { bg: '#ecfdf5', color: '#059669' },
@@ -218,6 +218,58 @@ export function FormSection({ title, description, children, right }) {
       </div>
       {description && <div style={{ fontSize: 12, color: '#9a9aa3', marginBottom: 12 }}>{description}</div>}
       {children}
+    </div>
+  );
+}
+
+/** Horizontal step indicator for wizard-style modals. `steps` is
+ * [{key,label}], `activeIndex` the current step. Pass `onSelect` to let the
+ * admin jump directly to a visited/available step by clicking its circle. */
+export function Stepper({ steps, activeIndex, onSelect }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 26 }}>
+      {steps.map((step, i) => {
+        const isActive = i === activeIndex;
+        const isDone = i < activeIndex;
+        const clickable = !!onSelect && (isDone || isActive || i === activeIndex + 1);
+        return (
+          <React.Fragment key={step.key}>
+            <button
+              type="button"
+              onClick={() => clickable && onSelect(i)}
+              disabled={!clickable}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+                background: 'transparent', border: 'none', cursor: clickable ? 'pointer' : 'default',
+                padding: 0, flexShrink: 0, width: 84,
+              }}
+            >
+              <div style={{
+                width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                fontSize: 13.5, fontWeight: 800,
+                background: isDone ? 'linear-gradient(135deg, #7C3AED, #A855F7)' : isActive ? '#fff' : '#f3f3f6',
+                color: isDone ? '#fff' : isActive ? '#7C3AED' : '#b3b3bb',
+                border: isActive ? '2.5px solid #7C3AED' : '2.5px solid transparent',
+                boxShadow: isActive ? '0 0 0 4px rgba(124,58,237,0.12)' : 'none',
+                transition: 'all 0.2s ease',
+              }}>
+                {isDone ? <FiCheckIcon /> : (step.icon ? <step.icon /> : i + 1)}
+              </div>
+              <span style={{
+                fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.2,
+                color: isActive ? '#7C3AED' : isDone ? '#52525b' : '#b3b3bb',
+              }}>{step.label}</span>
+            </button>
+            {i < steps.length - 1 && (
+              <div style={{
+                flex: 1, height: 2.5, marginTop: 16, borderRadius: 2,
+                background: isDone ? 'linear-gradient(90deg, #7C3AED, #A855F7)' : '#ececf1',
+                transition: 'background 0.25s ease',
+              }} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }

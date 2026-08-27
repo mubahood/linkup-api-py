@@ -62,8 +62,51 @@ what's actually running. Every future phase's deploy must re-check live
 `app.py`/`models/__init__.py` content the same way before touching them —
 do not assume the last deploy's patch context is still accurate.
 
-**Next**: Phase 3 (eurogirlsescort discovery adapter) — blocked on your go-ahead,
-and `ugandahotgirls`'s adapter stays blocked on the §0.1 accessibility re-check.
+**Phase 3 attempted — 2026-08-27 — both configured sources are currently blocked.**
+
+Per plan §4 ("structure analysis before writing any parser"), fetched the real
+`/escorts/uganda/` listing page with an honest, self-identifying User-Agent
+before writing any adapter code. Result: `eurogirlsescort.com`'s `robots.txt`
+is permissive (Crawl-delay: 5, no Disallow), but the site sits behind
+Cloudflare and returned an explicit block page — *"Sorry, you have been
+blocked — You are unable to access eurogirlsescort.com"* (HTTP 403,
+Cloudflare "Attention Required" challenge). That is an active anti-bot
+control, not an artifact of a malformed request. Per the project's ground
+rules, this was treated as conclusive on the first clear result — no retry
+with a different User-Agent, no headless-browser challenge-solving, no
+second fetch attempt via a different path to see if something slips through.
+
+Consequence: **`eurogirlsescort` flipped from `discovery_only` to
+`unavailable`** in `SOURCE_REGISTRY` (service.py), same treatment as
+`ugandahotgirls`. The Phase 1-2 code-level guard (`record_discovered()`
+refusing writes for `unavailable` sources) already covered this automatically
+— no pipeline code change needed, just the registry flag and its comment
+explaining why. Tests updated: the upsert/idempotency/pagination/dedup tests
+now run against a monkeypatched fixture source (`test_fixture_source`) so
+they verify the *mechanism*, not a real source's current reachability; a
+new/expanded `test_unavailable_source_is_rejected` asserts both real sources
+are refused, each for their own documented reason.
+
+**Net result: no adapter exists for either configured source yet, because
+there is no site currently reachable to build one against without
+circumventing an active technical control.** No live crawler was written
+against guessed/imagined markup — that would create false confidence in an
+untested parser.
+
+**Options going forward** (needs your call, not something to route around
+technically):
+1. Pursue legitimate access — e.g. contact either site operator about
+   allowlisting a declared crawler UA/IP for this specific purpose. This is
+   a business/outreach conversation, not an engineering one.
+2. Hold the crawling initiative until a source without an active anti-bot
+   control is identified.
+3. Provide a different candidate source to evaluate — the site-adapter
+   architecture (Phase 1) is unchanged either way; a new source is a new
+   adapter, not a redesign.
+
+`ugandahotgirls` remains blocked on its own §0.1 accessibility re-check too
+(connection reset on `robots.txt`, not yet independently re-verified by a
+human as requested in the original §0.1 gate).
 
 ---
 

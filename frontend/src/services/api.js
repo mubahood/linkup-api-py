@@ -46,6 +46,16 @@ export const adminAPI = {
 
   hubs:           (params) => v1.get('/admin/hubs', { params }),
   events:         (params) => v1.get('/admin/events', { params }),
+
+  // Listings importer — discovery, claims, verification (see
+  // PROFILE_CLAIM_IMPORTER_PLAN.md). Read-only on discovery/sources for now;
+  // there is no crawl-trigger endpoint yet (Phase 12) and no adapter to run
+  // regardless — both configured sources are 'unavailable'.
+  listingSources:        () => v1.get('/admin/listings/sources'),
+  listingsDiscovered:    (params) => v1.get('/admin/listings/discovered', { params }),
+  listingClaims:         (params) => v1.get('/admin/listings/claims', { params }),
+  listingReviewLiveness: (claimId, data) => v1.post(`/admin/listings/claims/${claimId}/review-liveness`, data),
+  listingTransitionClaim: (claimId, data) => v1.post(`/admin/listings/claims/${claimId}/transition`, data),
 };
 
 // Unwrap helpers for the API envelope: { code, message, data: ... }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { FiHome, FiUsers, FiFlag, FiLayers, FiActivity, FiX } from 'react-icons/fi';
+import { FiHome, FiUsers, FiFlag, FiLayers, FiActivity, FiX, FiSearch } from 'react-icons/fi';
 
 const NAV = [
   { to: '/',         icon: FiHome,     label: 'Dashboard', end: true },
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/reports',  icon: FiFlag,     label: 'Reports' },
   { to: '/hubs',     icon: FiLayers,   label: 'Hubs' },
   { to: '/events',   icon: FiActivity, label: 'Events' },
+  { to: '/listings', icon: FiSearch,   label: 'Listings' },
 ];
 
 export default function Sidebar({ open, onClose }) {

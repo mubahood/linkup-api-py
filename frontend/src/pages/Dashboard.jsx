@@ -10,6 +10,7 @@ const TITLES = {
   '/reports':  'Reports',
   '/hubs':     'Hubs',
   '/events':   'Events',
+  '/listings': 'Listings Importer',
 };
 
 export default function Dashboard() {

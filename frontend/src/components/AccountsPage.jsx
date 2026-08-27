@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { adminAPI, pageOf } from '../services/api';
-import { FiSearch, FiStar, FiSlash, FiRotateCcw, FiRefreshCw } from 'react-icons/fi';
+import { FiSearch, FiStar, FiSlash, FiRotateCcw, FiRefreshCw, FiUserPlus } from 'react-icons/fi';
 import {
   Badge, Avatar, fmtDate, tableStyle, thStyle, tdStyle,
   Toolbar, Pager, EmptyRow, btn,
 } from './adminUi';
+import CreateAccountModal from './CreateAccountModal';
 
 const STATUSES = ['', 'active', 'suspended', 'closed'];
 
@@ -16,6 +17,7 @@ export default function AccountsPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +82,7 @@ export default function AccountsPage() {
           {STATUSES.map((s) => <option key={s} value={s}>{s ? s[0].toUpperCase() + s.slice(1) : 'All statuses'}</option>)}
         </select>
         <button style={btn(false)} onClick={load}><FiRefreshCw /> Refresh</button>
+        <button style={btn(true)} onClick={() => setCreating(true)}><FiUserPlus /> New account</button>
       </Toolbar>
 
       <table style={tableStyle}>
@@ -143,6 +146,7 @@ export default function AccountsPage() {
       </table>
 
       <Pager page={meta.page} lastPage={meta.lastPage} total={meta.total} onPage={setPage} />
+      <CreateAccountModal open={creating} onClose={() => setCreating(false)} onCreated={load} />
     </div>
   );
 }

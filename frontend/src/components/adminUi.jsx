@@ -149,3 +149,75 @@ export function KeyVal({ k, v }) {
     </div>
   );
 }
+
+/** Centered modal for create/edit forms — distinct from Drawer (a side
+ * panel meant for read-mostly detail views). Click the backdrop or the X
+ * to close; pass `footer` for the action-button row. */
+export function Modal({ open, onClose, title, width = 720, children, footer }) {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 70, display: 'flex',
+      alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto',
+    }}>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,15,20,0.45)' }} />
+      <div style={{
+        position: 'relative', width, maxWidth: '100%', background: '#fff', borderRadius: 14,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column',
+        maxHeight: '90vh',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '18px 22px', borderBottom: '1px solid #ececf1', flexShrink: 0,
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 16.5 }}>{title}</div>
+          <button onClick={onClose} style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontSize: 20, color: '#8a8a93', lineHeight: 1,
+          }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>{children}</div>
+        {footer && (
+          <div style={{
+            padding: '16px 22px', borderTop: '1px solid #ececf1', display: 'flex',
+            justifyContent: 'flex-end', gap: 10, flexShrink: 0,
+          }}>{footer}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export const inputStyle = {
+  width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d8d8e0',
+  fontSize: 13.5, fontFamily: 'inherit', boxSizing: 'border-box', background: '#fff', color: '#18181b',
+};
+
+export function FormRow({ label, required, children, hint }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#52525b', marginBottom: 5 }}>
+        {label}{required && <span style={{ color: '#DC2626' }}> *</span>}
+      </label>
+      {children}
+      {hint && <div style={{ fontSize: 11.5, color: '#9a9aa3', marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+export function FormGrid({ children, cols = 2 }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: '0 16px' }}>{children}</div>;
+}
+
+export function FormSection({ title, description, children, right }) {
+  return (
+    <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #f3f3f6' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: description ? 2 : 12 }}>
+        <div style={{ fontWeight: 800, fontSize: 14 }}>{title}</div>
+        {right}
+      </div>
+      {description && <div style={{ fontSize: 12, color: '#9a9aa3', marginBottom: 12 }}>{description}</div>}
+      {children}
+    </div>
+  );
+}

@@ -32,11 +32,18 @@ export const authAPI = {
   login: ({ email, password }) => v1.post('/admin/login', { identifier: email, password }),
 };
 
+/* ── Reference data (public, no admin auth needed) ── */
+export const referenceAPI = {
+  datingOptions: () => v1.get('/reference/dating-options'),
+  locations:     (params) => v1.get('/reference/locations', { params }),
+};
+
 /* ── Admin (LinkUp) ── */
 export const adminAPI = {
   stats:          () => v1.get('/admin/stats'),
 
   accounts:       (params) => v1.get('/admin/accounts', { params }),
+  accountCreate:  (data) => v1.post('/admin/accounts', data),
   accountShow:    (id) => v1.get(`/admin/accounts/${id}`),
   accountStatus:  (id, data) => v1.put(`/admin/accounts/${id}/status`, data),
   accountPremium: (id, data) => v1.put(`/admin/accounts/${id}/premium`, data),

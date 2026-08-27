@@ -526,6 +526,25 @@ class ListingClaimRoutesTests(unittest.TestCase):
         resp2 = self.client.get('/v1/admin/listings/claims', headers=self.admin_headers)
         self.assertEqual(resp2.status_code, 200)
 
+    def test_list_claims_route_enriches_with_listing_and_events(self):
+        """The admin UI's Claims table needs listing context + which factors
+        passed without an extra round trip per row — confirms list_claims()
+        actually includes them, not just the bare claim fields."""
+        start = self.client.post('/v1/listings/claims', json={
+            'source_listing_id': self.listing.id, 'phone': '+256700000999',
+        })
+        claim_id = start.get_json()['data']['claim_id']
+        self.client.post(f'/v1/listings/claims/{claim_id}/otp/request')
+        self.client.post(f'/v1/listings/claims/{claim_id}/otp/verify', json={'code': DEV_OTP_CODE})
+
+        resp = self.client.get('/v1/admin/listings/claims', headers=self.admin_headers)
+        row = next(r for r in resp.get_json()['data']['data'] if r['id'] == claim_id)
+        self.assertEqual(row['listing']['source'], 'test_fixture_source')
+        self.assertEqual(row['listing']['location_text'], 'Kampala')
+        methods_passed = {e['method'] for e in row['verification_events'] if e['result'] == 'passed'}
+        self.assertIn('otp', methods_passed)
+        self.assertNotIn('liveness_match', methods_passed)
+
 
 def _io_bytes():
     import io

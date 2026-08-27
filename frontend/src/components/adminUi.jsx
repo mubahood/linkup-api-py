@@ -91,11 +91,61 @@ export function EmptyRow({ colSpan, text = 'Nothing here yet.' }) {
   );
 }
 
-export function btn(primary) {
+export function btn(primary, danger) {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px',
     borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-    border: primary ? 'none' : '1px solid #d8d8e0',
-    background: primary ? '#7C3AED' : '#fff', color: primary ? '#fff' : '#444',
+    border: primary ? 'none' : `1px solid ${danger ? '#f3c4c4' : '#d8d8e0'}`,
+    background: primary ? (danger ? '#DC2626' : '#7C3AED') : '#fff',
+    color: primary ? '#fff' : (danger ? '#DC2626' : '#444'),
   };
+}
+
+/** Slide-over drawer, used for detail/review views. Click the backdrop or
+ * the X to close. */
+export function Drawer({ open, onClose, title, width = 480, children }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
+      <div onClick={onClose} style={{
+        position: 'absolute', inset: 0, background: 'rgba(15,15,20,0.35)',
+      }} />
+      <div style={{
+        position: 'absolute', top: 0, right: 0, bottom: 0, width,
+        maxWidth: '92vw', background: '#fff', boxShadow: '-8px 0 32px rgba(0,0,0,0.14)',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 20px', borderBottom: '1px solid #ececf1',
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 15.5 }}>{title}</div>
+          <button onClick={onClose} style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontSize: 18, color: '#8a8a93', lineHeight: 1,
+          }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function SectionTitle({ children }) {
+  return (
+    <div style={{
+      fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5,
+      color: '#8a8a93', margin: '18px 0 8px',
+    }}>{children}</div>
+  );
+}
+
+export function KeyVal({ k, v }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0',
+      borderBottom: '1px solid #f3f3f6', fontSize: 13 }}>
+      <span style={{ color: '#8a8a93' }}>{k}</span>
+      <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: '60%' }}>{v ?? '—'}</span>
+    </div>
+  );
 }

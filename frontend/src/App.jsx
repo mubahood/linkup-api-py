@@ -9,6 +9,7 @@ const AccountsPage  = lazy(() => import('./components/AccountsPage'));
 const ReportsPage   = lazy(() => import('./components/ReportsPage'));
 const HubsPage      = lazy(() => import('./components/HubsPage'));
 const EventsPage    = lazy(() => import('./components/EventsPage'));
+const ListingsPage  = lazy(() => import('./components/ListingsPage'));
 
 const Loader = () => <div className="page-loader">Loading…</div>;
 
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Route path="reports" element={<Suspense fallback={<Loader />}><ReportsPage /></Suspense>} />
         <Route path="hubs" element={<Suspense fallback={<Loader />}><HubsPage /></Suspense>} />
         <Route path="events" element={<Suspense fallback={<Loader />}><EventsPage /></Suspense>} />
+        <Route path="listings" element={<Suspense fallback={<Loader />}><ListingsPage /></Suspense>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

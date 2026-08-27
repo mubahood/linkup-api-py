@@ -88,8 +88,8 @@ class ListingClaim(db.Model):
 
     listing = db.relationship('SourceListing', foreign_keys=[source_listing_id], lazy='joined')
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_listing: bool = False, include_events: bool = False):
+        data = {
             'id': self.id,
             'source_listing_id': self.source_listing_id,
             'status': self.status,
@@ -100,6 +100,18 @@ class ListingClaim(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_listing and self.listing is not None:
+            data['listing'] = {
+                'source': self.listing.source,
+                'location_text': self.listing.location_text,
+                'canonical_url': self.listing.canonical_url,
+            }
+        if include_events:
+            events = ClaimVerificationEvent.query.filter_by(claim_id=self.id).order_by(
+                ClaimVerificationEvent.created_at.asc()
+            ).all()
+            data['verification_events'] = [e.to_dict() for e in events]
+        return data
 
 
 class ClaimVerificationEvent(db.Model):

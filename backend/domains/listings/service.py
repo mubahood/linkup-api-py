@@ -32,28 +32,32 @@ SOURCE_REGISTRY = {
         'label': 'EuroGirlsEscort (Uganda)',
         'base_url': 'https://www.eurogirlsescort.com/escorts/uganda/',
         'mechanism': 'pagination',
-        # robots.txt itself is permissive (Crawl-delay: 5, no Disallow), but the
-        # site sits behind Cloudflare and returned an explicit "Sorry, you have
-        # been blocked" challenge page (HTTP 403) to a single, honestly
-        # self-identifying request (checked 2026-08-27). That's an active
-        # anti-bot control, not an accident — do not retry with a different
-        # User-Agent, headless browser, or any other technique to get past it.
-        # See plan §0.1 / Phase 3.
         'status': 'unavailable',
         'parser_version': None,
         'crawl_delay_seconds': None,
+        # Surfaced in the admin UI so "unavailable" isn't a dead end — see
+        # plan §0.1 / Phase 3 for the full record.
+        'notes': (
+            "robots.txt itself is permissive (Crawl-delay: 5, no Disallow), but "
+            "the site sits behind Cloudflare and returned an explicit \"Sorry, "
+            "you have been blocked\" challenge page (HTTP 403) to a single, "
+            "honestly self-identifying request (checked 2026-08-27). Do not "
+            "retry with a different User-Agent, headless browser, or any other "
+            "technique to get past it — pursue legitimate access instead."
+        ),
     },
     'ugandahotgirls': {
         'label': 'UgandaHotGirls',
         'base_url': 'https://www.ugandahotgirls.com/',
         'mechanism': 'ajax',
-        # robots.txt fetch reset the connection on two separate attempts
-        # (2026-08-27) — reads as active bot-detection. Do not build or
-        # enable this adapter until a human confirms the site is reachable
-        # to a well-behaved client without circumventing anything. See plan §0.1.
         'status': 'unavailable',
         'parser_version': None,
         'crawl_delay_seconds': None,
+        'notes': (
+            "robots.txt fetch reset the connection on two separate attempts "
+            "(2026-08-27) — reads as active bot-detection. Needs an independent "
+            "human recheck before this can be revisited."
+        ),
     },
 }
 

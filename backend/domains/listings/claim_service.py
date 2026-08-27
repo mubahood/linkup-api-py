@@ -252,4 +252,7 @@ class ListingClaimService:
         query = query.order_by(ListingClaim.created_at.desc())
 
         items, total, current_page, last_page, per_page = paginate_query(query, page, per_page)
-        return [c.to_dict() for c in items], total, current_page, last_page, per_page
+        return (
+            [c.to_dict(include_listing=True, include_events=True) for c in items],
+            total, current_page, last_page, per_page,
+        )

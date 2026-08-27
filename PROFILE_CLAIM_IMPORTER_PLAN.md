@@ -35,8 +35,32 @@ assumed):
   code, not just in the source-adapter that hasn't been written yet — verified by
   `test_unavailable_source_is_rejected`.
 
-**Not yet deployed to the production server** — see the "Deployment" note added
-below the rollout sequence (§15A). Local-only so far.
+**Deployed to production — 2026-08-27, verified.** Merged via
+[PR #1](https://github.com/mubahood/linkup-api-py/pull/1) to `main`, then
+deployed to the real production target (`abanoonyapro.online`, a shared
+AlmaLinux VPS reached via `ssh jangu-vps` — see the corrected
+`.server-credentials`/`DEPLOYMENT.md`/`.claude/commands/hosting.md`, which
+replaced an earlier, wrong Hetzner-VPS description). Verified post-deploy:
+`/v1/health` OK, `/v1/admin/listings/sources` returns 401 unauthenticated
+(not 500 — confirms clean import, not a crash), gunicorn error log shows a
+normal restart with no traceback, `migrate.py status` shows 38/38 ran.
+
+**Important operational finding for every future phase's deploy:** this
+server's deployment is **rsync-based, not git-pull-based** — there is no
+on-server git remote. That means production can silently drift ahead of
+`origin/main` (it already had migrations 0035-0037 and their code applied
+before this PR existed on GitHub, from an earlier manual rsync). Concretely,
+this meant a plain "rsync the whole repo from a clean `origin/main` checkout"
+would have **overwritten `backend/app.py` and reverted the already-live
+`app_version_bp` registration** — caught by diffing the worktree's `app.py`
+against the server's actual live `app.py` before pushing anything, not by
+assuming git history was authoritative. The fix each time: rsync only
+new/additive files/directories wholesale, and hand-patch shared files
+(`app.py`, `backend/models/__init__.py`) against a fresh copy of their
+*live* content, never against a git-checkout copy that might be behind
+what's actually running. Every future phase's deploy must re-check live
+`app.py`/`models/__init__.py` content the same way before touching them —
+do not assume the last deploy's patch context is still accurate.
 
 **Next**: Phase 3 (eurogirlsescort discovery adapter) — blocked on your go-ahead,
 and `ugandahotgirls`'s adapter stays blocked on the §0.1 accessibility re-check.

@@ -307,6 +307,23 @@ def create_account_admin(account):
     return success_response('Account created.', result, status_code=201)
 
 
+@admin_v1_bp.route('/accounts/<account_id>/photos', methods=['POST'])
+@_admin_required
+def upload_account_photo(account, account_id):
+    """Upload one photo on behalf of a target account (multipart: field=photo,
+    plus optional is_profile_photo/is_cover_photo/is_public/caption form
+    fields) — reuses PhotoService.upload's exact logic (storage, avatar/cover
+    sync, UserPhoto row) so admin-uploaded photos are indistinguishable from
+    ones the member uploaded themselves. Scoped to admin-acting-on-behalf-of,
+    unlike POST /v1/photos which uploads for the calling user."""
+    target = db.session.get(Account, account_id)
+    if not target or target.deleted_at:
+        return error_response('Account not found.', status_code=404)
+
+    from backend.domains.photos.service import PhotoService
+    return PhotoService.upload(target, request)
+
+
 @admin_v1_bp.route('/accounts/<account_id>', methods=['GET'])
 @_admin_required
 def get_account(account, account_id):

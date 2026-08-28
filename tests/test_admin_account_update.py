@@ -286,8 +286,12 @@ class AdminAccountUpdateTests(unittest.TestCase):
 
     def test_get_account_merges_dating_photos_with_dating_prefixed_ids(self):
         account_id = self._create_account(modes={'sparks': True, 'professional': False})
-        self._upload_photo(account_id)
+        # Dating photos set up first (the realistic order — onboarding wizard
+        # runs before an admin adds an extra gallery photo later): the
+        # gallery upload then correctly sees an existing primary photo and
+        # doesn't self-promote (see PhotoService.upload's first-photo rule).
         self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg', 'https://cdn.example.com/dating2.jpg'])
+        self._upload_photo(account_id)
 
         resp = self.client.get(f'/v1/admin/accounts/{account_id}', headers=self.admin_headers)
         data = resp.get_json()['data']

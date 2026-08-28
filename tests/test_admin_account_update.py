@@ -220,6 +220,90 @@ class AdminAccountUpdateTests(unittest.TestCase):
         self.assertEqual(len(data['photos']), 2)
         self.assertEqual(data['photo_count'], 2)
 
+    # ── Dating-profile-only photos (the Sparks mobile upload path) ──────────
+    # DatingProfile.photos is written directly by sparks/routes.py, never by
+    # the admin create/update endpoints (it isn't in _DATING_PROFILE_FIELDS),
+    # so these tests set it straight on the model — same as a real mobile
+    # dating-photo upload would leave it.
+
+    def _set_dating_photos(self, account_id, urls):
+        dp = DatingProfile.query.filter_by(account_id=account_id).first()
+        if not dp:
+            dp = DatingProfile(account_id=account_id)
+            db.session.add(dp)
+        dp.photos = [{'url': u, 'caption': None} for u in urls]
+        db.session.commit()
+
+    def test_list_accounts_falls_back_to_dating_photo_for_avatar_and_count(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg', 'https://cdn.example.com/dating2.jpg'])
+
+        resp = self.client.get('/v1/admin/accounts', query_string={'q': 'Edit Target', 'per_page': 50}, headers=self.admin_headers)
+        row = next(r for r in resp.get_json()['data']['data'] if r['id'] == account_id)
+        self.assertEqual(row['avatar'], 'https://cdn.example.com/dating1.jpg')
+        self.assertEqual(row['photo_count'], 2)
+
+    def test_list_accounts_prefers_real_avatar_over_dating_photo(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg'])
+        acct = db.session.get(Account, account_id)
+        acct.avatar = 'https://cdn.example.com/real-avatar.jpg'
+        db.session.commit()
+
+        resp = self.client.get('/v1/admin/accounts', query_string={'q': 'Edit Target', 'per_page': 50}, headers=self.admin_headers)
+        row = next(r for r in resp.get_json()['data']['data'] if r['id'] == account_id)
+        self.assertEqual(row['avatar'], 'https://cdn.example.com/real-avatar.jpg')
+
+    def test_get_account_merges_dating_photos_with_dating_prefixed_ids(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._upload_photo(account_id)
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg', 'https://cdn.example.com/dating2.jpg'])
+
+        resp = self.client.get(f'/v1/admin/accounts/{account_id}', headers=self.admin_headers)
+        data = resp.get_json()['data']
+        self.assertEqual(data['photo_count'], 3)
+        dating_ids = sorted(p['id'] for p in data['photos'] if p['id'].startswith('dating:'))
+        self.assertEqual(dating_ids, ['dating:0', 'dating:1'])
+        # account.avatar was never set (no is_profile_photo upload), so the
+        # resolved avatar falls back to the first dating photo.
+        self.assertEqual(data['avatar'], 'https://cdn.example.com/dating1.jpg')
+
+    def test_delete_dating_photo_removes_it_by_index(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg', 'https://cdn.example.com/dating2.jpg'])
+
+        resp = self.client.delete(f'/v1/admin/accounts/{account_id}/photos/dating:0', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+
+        dp = DatingProfile.query.filter_by(account_id=account_id).first()
+        self.assertEqual(len(dp.photos), 1)
+        self.assertEqual(dp.photos[0]['url'], 'https://cdn.example.com/dating2.jpg')
+
+    def test_delete_dating_photo_unknown_index_404s(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg'])
+
+        resp = self.client.delete(f'/v1/admin/accounts/{account_id}/photos/dating:5', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_delete_dating_photo_malformed_index_404s(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg'])
+
+        resp = self.client.delete(f'/v1/admin/accounts/{account_id}/photos/dating:not-a-number', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_delete_real_photo_still_works_when_dating_photos_also_exist(self):
+        account_id = self._create_account(modes={'sparks': True, 'professional': False})
+        photo_id = self._upload_photo(account_id)
+        self._set_dating_photos(account_id, ['https://cdn.example.com/dating1.jpg'])
+
+        resp = self.client.delete(f'/v1/admin/accounts/{account_id}/photos/{photo_id}', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(db.session.get(UserPhoto, photo_id))
+        dp = DatingProfile.query.filter_by(account_id=account_id).first()
+        self.assertEqual(len(dp.photos), 1)  # untouched
+
 
 if __name__ == '__main__':
     unittest.main()

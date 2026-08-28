@@ -285,11 +285,13 @@ class AdminAccountCreationTests(unittest.TestCase):
             content_type='multipart/form-data', headers=self.admin_headers,
         )
         self.assertEqual(resp.status_code, 201)
+        # Identify "the second upload" from the response itself, not by
+        # re-querying ordered by created_at — two uploads in the same test
+        # can tie at second resolution, making that ordering ambiguous.
+        self.assertFalse(resp.get_json()['data']['is_profile_photo'])
 
         db.session.refresh(acct)
         self.assertEqual(acct.avatar, first_avatar)
-        second = UserPhoto.query.filter_by(account_id=account_id).order_by(UserPhoto.created_at.desc()).first()
-        self.assertFalse(second.is_profile_photo)
 
     def test_gallery_upload_does_not_promote_when_dating_photos_already_exist(self):
         account_id = self._create_account()

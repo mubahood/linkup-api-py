@@ -1,6 +1,7 @@
 from backend.models import db
 from backend.domains.photos.models import UserPhoto
-from backend.shared.storage.r2 import save_upload
+from backend.shared.storage.r2 import save_upload, save_bytes
+from backend.shared.storage.url_fetch import fetch_image_from_url, ImageFetchError
 from backend.shared.utils.response import success_response, error_response
 
 
@@ -10,13 +11,28 @@ class PhotoService:
 
     @staticmethod
     def upload(account, flask_request):
+        """Accepts either a `photo` file (normal upload) or a `photo_url`
+        field (drag-an-image-from-another-website — the browser only gives
+        us the image's URL when the drag source isn't a local file, so the
+        server fetches it; see url_fetch.py for why that's not just a plain
+        `requests.get`)."""
         file = flask_request.files.get('photo')
-        if not file:
-            return error_response('No photo file provided.')
+        photo_url = (flask_request.form.get('photo_url') or '').strip()
 
-        url = save_upload(file, folder='gallery')
-        if not url:
-            return error_response('Upload failed. Use JPG, PNG, or WebP images.')
+        if file:
+            url = save_upload(file, folder='gallery')
+            if not url:
+                return error_response('Upload failed. Use JPG, PNG, or WebP images.')
+        elif photo_url:
+            try:
+                data, ext = fetch_image_from_url(photo_url)
+            except ImageFetchError as e:
+                return error_response(str(e))
+            url = save_bytes(data, ext, folder='gallery')
+            if not url:
+                return error_response('Could not save that image.')
+        else:
+            return error_response('No photo file or photo_url provided.')
 
         form = flask_request.form
         is_profile = form.get('is_profile_photo', 'false').lower() == 'true'

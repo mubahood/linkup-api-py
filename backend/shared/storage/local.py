@@ -52,6 +52,31 @@ def save_upload(file, folder: str = 'general') -> str | None:
         return None
 
 
+def save_bytes(data: bytes, ext: str, folder: str = 'general') -> str | None:
+    """Same as save_upload but for raw bytes with a known extension already
+    validated by the caller (see url_fetch.py) — used for the drag-an-image-
+    from-a-webpage flow, where there's no Werkzeug FileStorage object."""
+    ext = (ext or '').lower().lstrip('.')
+    if ext not in ALLOWED_FILE_EXTENSIONS:
+        logger.warning(f'[Storage] Rejected file extension: {ext}')
+        return None
+
+    upload_folder = _get_upload_folder()
+    dest_dir = os.path.join(upload_folder, folder)
+    os.makedirs(dest_dir, exist_ok=True)
+
+    unique_name = f'{uuid.uuid4().hex}.{ext}'
+    dest_path = os.path.join(dest_dir, unique_name)
+
+    try:
+        with open(dest_path, 'wb') as f:
+            f.write(data)
+        return f'/uploads/{folder}/{unique_name}'
+    except Exception as exc:
+        logger.error(f'[Storage] Failed to save bytes: {exc}')
+        return None
+
+
 def get_url(path: str | None) -> str | None:
     """Convert a stored path to a full URL."""
     if not path:

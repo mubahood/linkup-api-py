@@ -145,7 +145,10 @@ def stats(account):
 @admin_v1_bp.route('/accounts', methods=['GET'])
 @_admin_required
 def list_accounts(account):
-    """List all accounts with filters."""
+    """List all accounts with filters, enriched with a dating-profile summary
+    (age, gender, bio, location, photo count) per row for the admin table —
+    fetched in 3 bounded queries total (accounts page, dating profiles,
+    photo counts), not per-row, regardless of page size."""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     q = request.args.get('q', '').strip()
@@ -167,8 +170,46 @@ def list_accounts(account):
 
     query = query.order_by(Account.created_at.desc())
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+
+    account_ids = [a.id for a in items]
+    dating_by_account, photo_counts, district_names = {}, {}, {}
+    if account_ids:
+        from datetime import date as _date
+        from backend.domains.profile.models import DatingProfile
+        from backend.domains.photos.models import UserPhoto
+        from backend.domains.reference.models import Location
+
+        dating_by_account = {
+            dp.account_id: dp for dp in
+            DatingProfile.query.filter(DatingProfile.account_id.in_(account_ids)).all()
+        }
+        photo_counts = dict(
+            db.session.query(UserPhoto.account_id, func.count(UserPhoto.id))
+            .filter(UserPhoto.account_id.in_(account_ids))
+            .group_by(UserPhoto.account_id).all()
+        )
+        district_ids = {dp.district_id for dp in dating_by_account.values() if dp.district_id}
+        if district_ids:
+            district_names = {
+                loc.id: loc.name for loc in
+                Location.query.filter(Location.id.in_(district_ids)).all()
+            }
+
+    def _row(a):
+        d = a.to_dict()
+        d['photo_count'] = photo_counts.get(a.id, 0)
+        dp = dating_by_account.get(a.id)
+        d['dating_profile_summary'] = None if not dp else {
+            'age': (_date.today().year - dp.birth_year) if dp.birth_year else None,
+            'gender': dp.gender,
+            'bio': dp.bio,
+            'relationship_goal': dp.relationship_goal,
+            'location_label': district_names.get(dp.district_id),
+        }
+        return d
+
     return paginated_response(
-        [a.to_dict() for a in items], total, page, per_page, 'Accounts loaded.'
+        [_row(a) for a in items], total, page, per_page, 'Accounts loaded.'
     )
 
 
@@ -307,6 +348,110 @@ def create_account_admin(account):
     return success_response('Account created.', result, status_code=201)
 
 
+@admin_v1_bp.route('/accounts/<account_id>', methods=['PUT'])
+@_admin_required
+def update_account_admin(account, account_id):
+    """
+    Full update of an existing account — the edit-mode counterpart of
+    POST /v1/admin/accounts, sharing the same request shape and the same
+    field whitelists, so the create/edit form on the frontend can be one
+    component. Body: display_name?, handle?, phone?, email?, password?,
+    app_id?, is_premium?, modes?: {professional?, sparks?},
+    dating_profile?: {...}, professional_profile?: {...}.
+
+    Turning a mode off does NOT delete that profile's row — just flips
+    modes_enabled — so re-enabling it later doesn't lose data. Password is
+    left untouched unless explicitly provided (unlike create, blank here
+    does not generate a new one — an untouched field means "no change").
+    """
+    target = db.session.get(Account, account_id)
+    if not target or target.deleted_at:
+        return error_response('Account not found.', status_code=404)
+
+    data = request.get_json(silent=True) or {}
+
+    display_name = data.get('display_name')
+    if display_name is not None:
+        display_name = display_name.strip()
+        if not display_name:
+            return error_response('display_name cannot be empty.', status_code=400)
+        if len(display_name) > 200:
+            return error_response('display_name is too long (max 200 characters).', status_code=400)
+        target.display_name = display_name
+
+    if 'phone' in data:
+        phone = (data.get('phone') or '').strip() or None
+        if phone and Account.query.filter(Account.phone == phone, Account.id != account_id).first():
+            return error_response('An account with that phone number already exists.', status_code=400)
+        target.phone = phone
+
+    if 'email' in data:
+        email = (data.get('email') or '').strip().lower() or None
+        if email and Account.query.filter(Account.email == email, Account.id != account_id).first():
+            return error_response('An account with that email already exists.', status_code=400)
+        target.email = email
+
+    if not target.phone and not target.email:
+        return error_response('At least one of phone or email is required.', status_code=400)
+
+    if 'handle' in data:
+        handle = (data.get('handle') or '').strip().lower()
+        if handle and handle != target.handle:
+            if Account.query.filter(Account.handle == handle, Account.id != account_id).first():
+                return error_response('That handle is already taken.', status_code=400)
+            target.handle = handle
+
+    if 'app_id' in data:
+        app_id = (data.get('app_id') or '').strip()
+        if app_id not in ('linkup', 'abanoonya'):
+            return error_response('app_id must be linkup or abanoonya.', status_code=400)
+        target.app_id = app_id
+
+    if 'is_premium' in data:
+        target.is_premium = 1 if data['is_premium'] else 0
+
+    password = (data.get('password') or '').strip()
+    if password:
+        if len(password) < 6:
+            return error_response('Password must be at least 6 characters.', status_code=400)
+        target.set_password(password)
+
+    modes_in = data.get('modes')
+    if modes_in is not None:
+        current_modes = dict(target.modes)
+        current_modes['professional'] = bool(modes_in.get('professional', current_modes.get('professional')))
+        current_modes['sparks'] = bool(modes_in.get('sparks', current_modes.get('sparks')))
+        target.modes_enabled = current_modes
+
+    modes_now = target.modes
+
+    dp_data = data.get('dating_profile')
+    if modes_now.get('sparks') and dp_data is not None:
+        from backend.domains.profile.models import DatingProfile
+        from backend.domains.reference.models import Location
+        dp = DatingProfile.query.filter_by(account_id=account_id).first()
+        if not dp:
+            dp = DatingProfile(account_id=account_id, display_name=target.display_name)
+            db.session.add(dp)
+        _apply_whitelisted_fields(dp, dp_data, _DATING_PROFILE_FIELDS)
+        if dp.district_id and 'district_id' in dp_data:
+            district = db.session.get(Location, dp.district_id)
+            if district and district.parent_id:
+                dp.region_id = district.parent_id
+
+    pp_data = data.get('professional_profile')
+    if modes_now.get('professional') and pp_data is not None:
+        from backend.domains.profile.models import ProfessionalProfile
+        pp = ProfessionalProfile.query.filter_by(account_id=account_id).first()
+        if not pp:
+            pp = ProfessionalProfile(account_id=account_id)
+            db.session.add(pp)
+        _apply_whitelisted_fields(pp, pp_data, _PROFESSIONAL_PROFILE_FIELDS)
+
+    db.session.commit()
+    return success_response('Account updated.', target.to_dict())
+
+
 @admin_v1_bp.route('/accounts/<account_id>/photos', methods=['POST'])
 @_admin_required
 def upload_account_photo(account, account_id):
@@ -324,16 +469,54 @@ def upload_account_photo(account, account_id):
     return PhotoService.upload(target, request)
 
 
+@admin_v1_bp.route('/accounts/<account_id>/photos/<photo_id>', methods=['DELETE'])
+@_admin_required
+def delete_account_photo(account, account_id, photo_id):
+    """Delete one of a target account's photos — reuses PhotoService.delete_photo,
+    which also auto-promotes the next-most-recent photo to profile/cover if
+    the deleted one held that role."""
+    target = db.session.get(Account, account_id)
+    if not target or target.deleted_at:
+        return error_response('Account not found.', status_code=404)
+
+    from backend.domains.photos.service import PhotoService
+    return PhotoService.delete_photo(target, photo_id)
+
+
 @admin_v1_bp.route('/accounts/<account_id>', methods=['GET'])
 @_admin_required
 def get_account(account, account_id):
-    """Get a single account detail."""
+    """Get a single account detail, including the nested dating/professional
+    profile and full photo list — the edit form (AccountFormModal) reads
+    this to pre-populate itself."""
     target = db.session.get(Account, account_id)
     if not target:
         return error_response('Account not found.', status_code=404)
     data = target.to_dict()
-    # Attach report count
     data['report_count'] = Report.query.filter_by(target_account_id=account_id).count()
+
+    try:
+        from backend.domains.profile.models import ProfessionalProfile, DatingProfile
+        prof = ProfessionalProfile.query.filter_by(account_id=account_id).first()
+        data['professional_profile'] = prof.to_dict() if prof else None
+        dating = DatingProfile.query.filter_by(account_id=account_id).first()
+        data['dating_profile'] = dating.to_dict() if dating else None
+    except Exception:
+        data['professional_profile'] = None
+        data['dating_profile'] = None
+
+    try:
+        from backend.domains.photos.models import UserPhoto
+        photos = UserPhoto.query.filter_by(account_id=account_id).order_by(
+            UserPhoto.is_profile_photo.desc(), UserPhoto.sort_order.asc(),
+            UserPhoto.created_at.desc(),
+        ).all()
+        data['photo_count'] = len(photos)
+        data['photos'] = [p.to_dict() for p in photos]
+    except Exception:
+        data['photo_count'] = 0
+        data['photos'] = []
+
     return success_response('Account loaded.', data)
 
 

@@ -1,5 +1,6 @@
-import React from 'react';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FiChevronLeft, FiChevronRight, FiMoreVertical } from 'react-icons/fi';
 
 const STATUS = {
   active:    { bg: '#ecfdf5', color: '#059669' },
@@ -221,3 +222,95 @@ export function FormSection({ title, description, children, right }) {
     </div>
   );
 }
+/**
+ * Kebab-menu action dropdown for table rows. `items` is
+ * [{label, icon?, onClick, danger?}] — falsy entries are skipped so callers
+ * can conditionally include an action inline (e.g. `status === 'active' &&
+ * {...}`). Closes on outside click, Escape, or scroll.
+ *
+ * Renders through a portal into document.body rather than as a normal
+ * absolutely-positioned child: this button typically sits inside a table
+ * styled with `overflow: hidden` (tableStyle, for rounded corners), which
+ * would silently clip a same-subtree dropdown to the table's bounding box —
+ * exactly the kind of bug that only shows up once you actually open the
+ * menu and look, not from reading the code.
+ */
+export function ActionMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const openMenu = () => {
+    const rect = btnRef.current.getBoundingClientRect();
+    const width = 180;
+    setPos({ top: rect.bottom + 6, left: Math.max(8, rect.right - width) });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  const visible = items.filter(Boolean);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : openMenu(); }}
+        className="btn-icon"
+        style={{
+          width: 30, height: 30, display: 'grid', placeItems: 'center', borderRadius: 8,
+          border: '1px solid #d8d8e0', background: open ? '#f3f3f6' : '#fff', cursor: 'pointer', color: '#52525b',
+        }}
+      ><FiMoreVertical size={15} /></button>
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 1000, minWidth: 180,
+            background: '#fff', border: '1px solid #ececf1', borderRadius: 10,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.16)', padding: 6, display: 'flex', flexDirection: 'column',
+          }}
+        >
+          {visible.map((item, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => { setOpen(false); item.onClick(); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 7,
+                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left',
+                fontSize: 12.5, fontWeight: 600, color: item.danger ? '#DC2626' : '#27272a',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = item.danger ? '#fef2f2' : '#f5f5f7'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              {item.icon && <item.icon size={13} />} {item.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+

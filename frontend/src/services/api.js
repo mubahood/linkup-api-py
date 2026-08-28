@@ -44,9 +44,11 @@ export const adminAPI = {
 
   accounts:       (params) => v1.get('/admin/accounts', { params }),
   accountCreate:  (data) => v1.post('/admin/accounts', data),
+  accountUpdate:  (id, data) => v1.put(`/admin/accounts/${id}`, data),
   accountPhotoUpload: (id, formData) => v1.post(`/admin/accounts/${id}/photos`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  accountPhotoDelete: (id, photoId) => v1.delete(`/admin/accounts/${id}/photos/${photoId}`),
   accountShow:    (id) => v1.get(`/admin/accounts/${id}`),
   accountStatus:  (id, data) => v1.put(`/admin/accounts/${id}/status`, data),
   accountPremium: (id, data) => v1.put(`/admin/accounts/${id}/premium`, data),

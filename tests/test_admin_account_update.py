@@ -186,9 +186,16 @@ class AdminAccountUpdateTests(unittest.TestCase):
     # ── Photo deletion ──────────────────────────────────────────────────────
 
     def _upload_photo(self, account_id, is_profile=False):
+        # A genuine (if tiny) JPEG — PhotoService.upload decodes uploads via
+        # Pillow (see image_compress.py) rather than trusting the filename
+        # extension, so placeholder text bytes would be rejected.
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', (20, 20), color=(120, 140, 160)).save(buf, 'JPEG')
+        buf.seek(0)
         resp = self.client.post(
             f'/v1/admin/accounts/{account_id}/photos',
-            data={'photo': (io.BytesIO(b'test-bytes'), 'p.jpg'), **({'is_profile_photo': 'true'} if is_profile else {})},
+            data={'photo': (buf, 'p.jpg'), **({'is_profile_photo': 'true'} if is_profile else {})},
             content_type='multipart/form-data', headers=self.admin_headers,
         )
         return resp.get_json()['data']['id']

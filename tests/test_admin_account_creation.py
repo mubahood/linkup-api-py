@@ -75,6 +75,17 @@ class AdminAccountCreationTests(unittest.TestCase):
         acct = db.session.get(Account, data['id'])
         self.assertTrue(acct.check_password(data['generated_password']))
 
+    def test_messy_phone_is_cleaned_on_creation(self):
+        digits = f'{uuid.uuid4().int % 10**8:08d}'  # exactly 8 digits
+        messy = f'+256 {digits[:2]}-{digits[2:]} '  # "+256 12-345678 "
+        resp = self.client.post('/v1/admin/accounts', json={
+            'display_name': 'Messy Phone', 'phone': messy,
+        }, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 201)
+        data = resp.get_json()['data']
+        self.created_account_ids.append(data['id'])
+        self.assertEqual(data['phone'], f'+256{digits}')
+
     def test_explicit_password_is_not_echoed_back(self):
         phone = self._phone()
         resp = self.client.post('/v1/admin/accounts', json={
@@ -198,7 +209,17 @@ class AdminAccountCreationTests(unittest.TestCase):
         return account_id
 
     def _fake_photo(self, name='photo.jpg'):
-        return (io.BytesIO(b'not-a-real-image-just-test-bytes'), name)
+        # A genuine (if tiny) JPEG — PhotoService.upload now actually
+        # decodes uploads via Pillow (see image_compress.py) rather than
+        # trusting the filename extension, so placeholder text bytes would
+        # correctly get rejected as "not a valid image".
+        from PIL import Image
+        import random
+        buf = io.BytesIO()
+        color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        Image.new('RGB', (20, 20), color=color).save(buf, 'JPEG')
+        buf.seek(0)
+        return (buf, name)
 
     def test_account_status_defaults_to_active(self):
         resp = self.client.post('/v1/admin/accounts', json={
@@ -336,7 +357,7 @@ class AdminAccountCreationTests(unittest.TestCase):
     def test_upload_from_url_saves_and_sets_avatar(self):
         from unittest.mock import patch
         account_id = self._create_account()
-        fake_bytes = b'\xff\xd8\xff-fake-jpeg-bytes'
+        fake_bytes = self._fake_photo()[0].read()
         with patch('backend.domains.photos.service.fetch_image_from_url', return_value=(fake_bytes, 'jpg')), \
              patch('backend.domains.photos.service.save_bytes', return_value='/uploads/gallery/from-url.jpg'):
             resp = self.client.post(

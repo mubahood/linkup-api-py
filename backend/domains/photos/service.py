@@ -1,7 +1,8 @@
 from backend.models import db
 from backend.domains.photos.models import UserPhoto
-from backend.shared.storage.r2 import save_upload, save_bytes
+from backend.shared.storage.r2 import save_bytes
 from backend.shared.storage.url_fetch import fetch_image_from_url, ImageFetchError
+from backend.shared.storage.image_compress import compress_image
 from backend.shared.utils.response import success_response, error_response
 
 
@@ -15,24 +16,33 @@ class PhotoService:
         field (drag-an-image-from-another-website — the browser only gives
         us the image's URL when the drag source isn't a local file, so the
         server fetches it; see url_fetch.py for why that's not just a plain
-        `requests.get`)."""
+        `requests.get`). Either way the raw bytes converge on the same path
+        from here: compressed (see image_compress.py — this also doubles as
+        the real "is this actually an image" check, replacing a bare
+        filename-extension guess) and saved uniformly."""
         file = flask_request.files.get('photo')
         photo_url = (flask_request.form.get('photo_url') or '').strip()
 
         if file:
-            url = save_upload(file, folder='gallery')
-            if not url:
-                return error_response('Upload failed. Use JPG, PNG, or WebP images.')
+            raw = file.read()
+            if not raw:
+                return error_response('Empty file.')
         elif photo_url:
             try:
-                data, ext = fetch_image_from_url(photo_url)
+                raw, _ = fetch_image_from_url(photo_url)
             except ImageFetchError as e:
                 return error_response(str(e))
-            url = save_bytes(data, ext, folder='gallery')
-            if not url:
-                return error_response('Could not save that image.')
         else:
             return error_response('No photo file or photo_url provided.')
+
+        try:
+            compressed, ext = compress_image(raw)
+        except ValueError:
+            return error_response('Upload failed. Use JPG, PNG, or WebP images.')
+
+        url = save_bytes(compressed, ext, folder='gallery')
+        if not url:
+            return error_response('Could not save that image.')
 
         form = flask_request.form
         is_profile = form.get('is_profile_photo', 'false').lower() == 'true'

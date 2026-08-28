@@ -2,6 +2,7 @@
 Admin v1 routes: /v1/admin/*
 All endpoints require is_admin=1 on the calling account.
 """
+import re
 from datetime import datetime, timedelta
 from flask import Blueprint, request
 from sqlalchemy import func, or_
@@ -317,6 +318,22 @@ def _generate_password(length=12):
     return ''.join(_secrets.choice(alphabet) for _ in range(length))
 
 
+def _clean_phone(raw):
+    """Strip a pasted/typed phone number down to digits (keeping a leading
+    + for the country code) — mirrors the same cleanup in
+    AccountFormModal.jsx client-side; done again here so a non-UI caller of
+    this API can't skip it and leave "+256 700-000 000" style values in the
+    uniqueness index."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    has_plus = raw.startswith('+')
+    digits = re.sub(r'\D', '', raw)
+    if not digits:
+        return None
+    return ('+' if has_plus else '') + digits
+
+
 def _apply_whitelisted_fields(instance, data, allowed_fields):
     for field in allowed_fields:
         if field in data:
@@ -342,7 +359,7 @@ def create_account_admin(account):
     """
     data = request.get_json(silent=True) or {}
     display_name = (data.get('display_name') or '').strip()
-    phone = (data.get('phone') or '').strip() or None
+    phone = _clean_phone(data.get('phone'))
     email = (data.get('email') or '').strip().lower() or None
     handle = (data.get('handle') or '').strip().lower() or None
 
@@ -470,7 +487,7 @@ def update_account_admin(account, account_id):
         target.display_name = display_name
 
     if 'phone' in data:
-        phone = (data.get('phone') or '').strip() or None
+        phone = _clean_phone(data.get('phone'))
         if phone and Account.query.filter(Account.phone == phone, Account.id != account_id).first():
             return error_response('An account with that phone number already exists.', status_code=400)
         target.phone = phone

@@ -80,6 +80,12 @@ class PhotoService:
             ).update({'is_cover_photo': False}, synchronize_session=False)
             account.cover_photo = url
 
+        # Next slot in this account's gallery order — previously left at the
+        # column default (0) for every upload, which made "gallery order"
+        # silently degenerate to reverse-upload-order wherever sort_order
+        # was the tiebreaker (see list_photos/list_gallery below).
+        next_sort_order = UserPhoto.query.filter_by(account_id=account_id).count()
+
         photo = UserPhoto(
             account_id=account_id,
             url=url,
@@ -87,6 +93,7 @@ class PhotoService:
             is_cover_photo=is_cover,
             is_public=is_public,
             caption=caption,
+            sort_order=next_sort_order,
         )
         db.session.add(photo)
         db.session.commit()
@@ -148,11 +155,17 @@ class PhotoService:
                 'created_at': created_at,
             })
 
-        # 1) Dedicated gallery uploads
+        # 1) Dedicated gallery uploads — same ordering convention as
+        # list_photos (profile photo first, then declared gallery order)
+        # rather than pure recency, so the account's actual "photo #1"
+        # leads this source's slice of the aggregated grid too.
         pq = UserPhoto.query.filter_by(account_id=account_id)
         if not own:
             pq = pq.filter_by(is_public=True)
-        for p in pq.order_by(UserPhoto.created_at.desc()).all():
+        for p in pq.order_by(
+            UserPhoto.is_profile_photo.desc(), UserPhoto.is_cover_photo.desc(),
+            UserPhoto.sort_order.asc(), UserPhoto.created_at.desc(),
+        ).all():
             add(p.url, caption=p.caption, source='gallery',
                 created_at=p.created_at.isoformat() if p.created_at else None)
 
@@ -263,10 +276,12 @@ class PhotoService:
         db.session.delete(photo)
         db.session.flush()
 
-        # Auto-promote the most-recent remaining photo as profile/cover
+        # Auto-promote whichever remaining photo is earliest in gallery
+        # order (not "most recently uploaded" — the point of sort_order is
+        # that upload recency and gallery position aren't the same thing).
         if was_profile:
             nxt = UserPhoto.query.filter_by(account_id=account_id)\
-                .order_by(UserPhoto.created_at.desc()).first()
+                .order_by(UserPhoto.sort_order.asc(), UserPhoto.created_at.asc()).first()
             if nxt:
                 nxt.is_profile_photo = True
                 account.avatar = nxt.url
@@ -275,7 +290,7 @@ class PhotoService:
 
         if was_cover:
             nxt = UserPhoto.query.filter_by(account_id=account_id)\
-                .order_by(UserPhoto.created_at.desc()).first()
+                .order_by(UserPhoto.sort_order.asc(), UserPhoto.created_at.asc()).first()
             if nxt and not nxt.is_cover_photo:
                 nxt.is_cover_photo = True
                 account.cover_photo = nxt.url

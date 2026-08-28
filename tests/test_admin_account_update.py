@@ -139,6 +139,36 @@ class AdminAccountUpdateTests(unittest.TestCase):
         self.assertEqual(dp.bio, 'Updated bio')
         self.assertEqual(dp.gender, 'female')  # untouched field survives a partial update
 
+    def test_account_status_can_be_set_via_edit(self):
+        account_id = self._create_account()
+        resp = self.client.put(f'/v1/admin/accounts/{account_id}', json={'account_status': 'inactive'}, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()['data']['account_status'], 'inactive')
+        acct = db.session.get(Account, account_id)
+        self.assertEqual(acct.account_status, 'inactive')
+        self.assertIsNone(acct.deleted_at)
+
+    def test_account_status_closed_sets_deleted_at(self):
+        account_id = self._create_account()
+        resp = self.client.put(f'/v1/admin/accounts/{account_id}', json={'account_status': 'closed'}, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        acct = db.session.get(Account, account_id)
+        self.assertEqual(acct.account_status, 'closed')
+        self.assertIsNotNone(acct.deleted_at)
+
+    def test_account_status_rejects_invalid_value(self):
+        account_id = self._create_account()
+        resp = self.client.put(f'/v1/admin/accounts/{account_id}', json={'account_status': 'bogus'}, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_account_status_reactivating_from_closed_clears_deleted_at(self):
+        account_id = self._create_account()
+        self.client.put(f'/v1/admin/accounts/{account_id}', json={'account_status': 'closed'}, headers=self.admin_headers)
+        resp = self.client.put(f'/v1/admin/accounts/{account_id}', json={'account_status': 'active'}, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        acct = db.session.get(Account, account_id)
+        self.assertIsNone(acct.deleted_at)
+
     def test_disabling_a_mode_does_not_delete_its_profile_data(self):
         account_id = self._create_account(
             modes={'sparks': True, 'professional': False},
@@ -292,6 +322,16 @@ class AdminAccountUpdateTests(unittest.TestCase):
 
         resp = self.client.delete(f'/v1/admin/accounts/{account_id}/photos/dating:not-a-number', headers=self.admin_headers)
         self.assertEqual(resp.status_code, 404)
+
+    def test_list_accounts_gender_filter(self):
+        f_id = self._create_account(modes={'sparks': True, 'professional': False},
+                                     dating_profile={'gender': 'female'})
+        m_id = self._create_account(modes={'sparks': True, 'professional': False},
+                                     dating_profile={'gender': 'male'})
+        resp = self.client.get('/v1/admin/accounts', query_string={'gender': 'female', 'per_page': 100}, headers=self.admin_headers)
+        ids = {r['id'] for r in resp.get_json()['data']['data']}
+        self.assertIn(f_id, ids)
+        self.assertNotIn(m_id, ids)
 
     def test_delete_real_photo_still_works_when_dating_photos_also_exist(self):
         account_id = self._create_account(modes={'sparks': True, 'professional': False})

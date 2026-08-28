@@ -1,13 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { adminAPI, pageOf } from '../services/api';
-import { FiSearch, FiStar, FiSlash, FiRotateCcw, FiRefreshCw, FiUserPlus } from 'react-icons/fi';
+import { adminAPI, dataOf, pageOf } from '../services/api';
+import {
+  FiSearch, FiStar, FiSlash, FiRotateCcw, FiRefreshCw, FiUserPlus, FiEdit2,
+  FiHeart, FiBriefcase, FiCamera, FiMapPin,
+} from 'react-icons/fi';
 import {
   Badge, Avatar, fmtDate, tableStyle, thStyle, tdStyle,
-  Toolbar, Pager, EmptyRow, btn,
+  Toolbar, Pager, EmptyRow, btn, ActionMenu,
 } from './adminUi';
-import CreateAccountModal from './CreateAccountModal';
+import AccountFormModal from './AccountFormModal';
 
 const STATUSES = ['', 'active', 'suspended', 'closed'];
+const GENDER_LABEL = { male: 'Man', female: 'Woman' };
+
+function truncate(text, max = 64) {
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
 
 export default function AccountsPage() {
   const [rows, setRows] = useState([]);
@@ -18,6 +27,8 @@ export default function AccountsPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [editLoadingId, setEditLoadingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +72,18 @@ export default function AccountsPage() {
     }
   };
 
+  const openEdit = async (acct) => {
+    setEditLoadingId(acct.id);
+    try {
+      const res = await adminAPI.accountShow(acct.id);
+      setEditingAccount(dataOf(res));
+    } catch (e) {
+      alert(e.response?.data?.message || 'Could not load this account.');
+    } finally {
+      setEditLoadingId(null);
+    }
+  };
+
   const onSearch = (e) => { e.preventDefault(); setPage(1); load(); };
 
   return (
@@ -88,65 +111,107 @@ export default function AccountsPage() {
       <table style={tableStyle}>
         <thead>
           <tr>
-            <th style={thStyle}>Account</th>
-            <th style={thStyle}>Contact</th>
+            <th style={thStyle}>Member</th>
+            <th style={thStyle}>Profile</th>
+            <th style={thStyle}>Location</th>
+            <th style={thStyle}>Modes</th>
+            <th style={thStyle}>Photos</th>
             <th style={thStyle}>Status</th>
             <th style={thStyle}>Tier</th>
-            <th style={thStyle}>KYC</th>
             <th style={thStyle}>Joined</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <EmptyRow colSpan={7} text="Loading…" />
+            <EmptyRow colSpan={9} text="Loading…" />
           ) : rows.length === 0 ? (
-            <EmptyRow colSpan={7} text="No accounts found." />
-          ) : rows.map((u) => (
-            <tr key={u.id}>
-              <td style={tdStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Avatar name={u.display_name} avatar={u.avatar} />
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{u.display_name || '—'}</div>
-                    <div style={{ fontSize: 12, color: '#9a9aa3' }}>@{u.handle || '—'}</div>
+            <EmptyRow colSpan={9} text="No accounts found." />
+          ) : rows.map((u) => {
+            const dp = u.dating_profile_summary;
+            const modes = u.modes_enabled || {};
+            return (
+              <tr key={u.id}>
+                <td style={tdStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar name={u.display_name} avatar={u.avatar} />
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{u.display_name || '—'}</div>
+                      <div style={{ fontSize: 12, color: '#9a9aa3' }}>@{u.handle || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#b3b3bb' }}>{u.email || u.phone || '—'}</div>
+                    </div>
                   </div>
-                </div>
-              </td>
-              <td style={tdStyle}>
-                <div>{u.email || '—'}</div>
-                <div style={{ fontSize: 12, color: '#9a9aa3' }}>{u.phone || ''}</div>
-              </td>
-              <td style={tdStyle}><Badge value={u.account_status} /></td>
-              <td style={tdStyle}>{u.is_premium ? <Badge value="premium">Premium</Badge> : <span style={{ color: '#9a9aa3' }}>Free</span>}</td>
-              <td style={tdStyle}>L{u.kyc_level ?? 0}</td>
-              <td style={tdStyle}>{fmtDate(u.created_at)}</td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}>
-                <div style={{ display: 'inline-flex', gap: 6 }}>
-                  <button style={btn(false)} disabled={busyId === u.id}
-                    onClick={() => togglePremium(u)}>
-                    <FiStar /> {u.is_premium ? 'Revoke' : 'Premium'}
-                  </button>
-                  {u.account_status === 'active' ? (
-                    <button style={{ ...btn(false), color: '#DC2626', borderColor: '#f3c4c4' }}
-                      disabled={busyId === u.id} onClick={() => setStatusFor(u, 'suspended')}>
-                      <FiSlash /> Suspend
-                    </button>
-                  ) : (
-                    <button style={{ ...btn(false), color: '#059669', borderColor: '#bfe7d4' }}
-                      disabled={busyId === u.id} onClick={() => setStatusFor(u, 'active')}>
-                      <FiRotateCcw /> Reinstate
-                    </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td style={{ ...tdStyle, maxWidth: 260 }}>
+                  {dp ? (
+                    <>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                        {GENDER_LABEL[dp.gender] || dp.gender || '—'}{dp.age ? `, ${dp.age}` : ''}
+                      </div>
+                      {dp.bio && <div style={{ fontSize: 11.5, color: '#8a8a93', marginTop: 2 }}>{truncate(dp.bio)}</div>}
+                    </>
+                  ) : <span style={{ color: '#c4c4cc', fontSize: 12 }}>No dating profile</span>}
+                </td>
+                <td style={tdStyle}>
+                  {dp?.location_label ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5 }}>
+                      <FiMapPin size={12} color="#9a9aa3" /> {dp.location_label}
+                    </span>
+                  ) : <span style={{ color: '#c4c4cc', fontSize: 12 }}>—</span>}
+                </td>
+                <td style={tdStyle}>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {modes.sparks && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 700, color: '#DB2777', background: '#FCE7F3', borderRadius: 5, padding: '2px 7px' }}>
+                        <FiHeart size={10} /> Sparks
+                      </span>
+                    )}
+                    {modes.professional && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 700, color: '#5B21B6', background: '#EDE9FE', borderRadius: 5, padding: '2px 7px' }}>
+                        <FiBriefcase size={10} /> Pro
+                      </span>
+                    )}
+                    {!modes.sparks && !modes.professional && <span style={{ color: '#c4c4cc', fontSize: 12 }}>—</span>}
+                  </div>
+                </td>
+                <td style={tdStyle}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12.5, color: u.photo_count ? '#27272a' : '#c4c4cc' }}>
+                    <FiCamera size={12} /> {u.photo_count || 0}
+                  </span>
+                </td>
+                <td style={tdStyle}><Badge value={u.account_status} /></td>
+                <td style={tdStyle}>{u.is_premium ? <Badge value="premium">Premium</Badge> : <span style={{ color: '#9a9aa3' }}>Free</span>}</td>
+                <td style={tdStyle}>{fmtDate(u.created_at)}</td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  <ActionMenu items={[
+                    {
+                      label: editLoadingId === u.id ? 'Loading…' : 'Edit',
+                      icon: FiEdit2, onClick: () => openEdit(u),
+                    },
+                    {
+                      label: u.is_premium ? 'Revoke premium' : 'Grant premium',
+                      icon: FiStar, onClick: () => togglePremium(u),
+                    },
+                    u.account_status === 'active'
+                      ? { label: 'Suspend', icon: FiSlash, danger: true, onClick: () => setStatusFor(u, 'suspended') }
+                      : { label: 'Reinstate', icon: FiRotateCcw, onClick: () => setStatusFor(u, 'active') },
+                  ]} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
       <Pager page={meta.page} lastPage={meta.lastPage} total={meta.total} onPage={setPage} />
-      <CreateAccountModal open={creating} onClose={() => setCreating(false)} onCreated={load} />
+
+      <AccountFormModal open={creating} onClose={() => setCreating(false)} onSaved={load} />
+      <AccountFormModal
+        open={!!editingAccount}
+        account={editingAccount}
+        onClose={() => setEditingAccount(null)}
+        onSaved={load}
+      />
     </div>
   );
 }

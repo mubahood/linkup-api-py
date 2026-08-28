@@ -173,19 +173,26 @@ def _dating_photo_entries(dp):
     ]
 
 
-def _resolve_avatar(account_avatar, dp):
+def _resolve_avatar(account_avatar, dp, fallback_photo_url=None):
     """Account.avatar is the professional/general avatar; a Sparks-only
     member typically never sets it — their real main photo is the first
     entry in DatingProfile.photos (see profile/routes.py's own comment on
     `dating_photos`: 'the dating wizard uploads here, not to account.avatar,
     so this is the real main photo source for a dating-only account'). The
     admin console must fall back to it the same way, or it just shows a
-    blank avatar for someone who very much has a photo."""
+    blank avatar for someone who very much has a photo.
+
+    `fallback_photo_url` is a last resort: the account's own best UserPhoto
+    (see callers), for the case where real photos exist but none ever got
+    flagged is_profile_photo (e.g. an admin uploaded several gallery photos
+    without marking one primary) — PhotoService.upload now prevents this for
+    new uploads, but this keeps already-affected accounts from showing a
+    blank avatar despite genuinely having photos."""
     if account_avatar:
         return account_avatar
     if dp and dp.photos:
         return _dating_photo_url(dp.photos[0])
-    return None
+    return fallback_photo_url
 
 
 @admin_v1_bp.route('/accounts', methods=['GET'])
@@ -228,7 +235,7 @@ def list_accounts(account):
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
 
     account_ids = [a.id for a in items]
-    dating_by_account, photo_counts, district_names = {}, {}, {}
+    dating_by_account, photo_counts, district_names, fallback_avatar_by_account = {}, {}, {}, {}
     if account_ids:
         from datetime import date as _date
         from backend.domains.profile.models import DatingProfile
@@ -244,6 +251,13 @@ def list_accounts(account):
             .filter(UserPhoto.account_id.in_(account_ids))
             .group_by(UserPhoto.account_id).all()
         )
+        # Best-effort avatar fallback when no photo is flagged is_profile_photo
+        # anywhere (see _resolve_avatar) — page-scoped, so bounded regardless
+        # of page size.
+        for p in (UserPhoto.query.filter(UserPhoto.account_id.in_(account_ids))
+                  .order_by(UserPhoto.is_profile_photo.desc(), UserPhoto.sort_order.asc(),
+                            UserPhoto.created_at.asc()).all()):
+            fallback_avatar_by_account.setdefault(p.account_id, p.url)
         district_ids = {dp.district_id for dp in dating_by_account.values() if dp.district_id}
         if district_ids:
             district_names = {
@@ -257,7 +271,7 @@ def list_accounts(account):
         # UserPhoto count + dating_profile.photos count — two genuinely
         # separate storage paths (see _resolve_avatar), both real photos.
         d['photo_count'] = photo_counts.get(a.id, 0) + (len(dp.photos) if dp and dp.photos else 0)
-        d['avatar'] = _resolve_avatar(d['avatar'], dp)
+        d['avatar'] = _resolve_avatar(d['avatar'], dp, fallback_avatar_by_account.get(a.id))
         d['dating_profile_summary'] = None if not dp else {
             'age': (_date.today().year - dp.birth_year) if dp.birth_year else None,
             'gender': dp.gender,
@@ -612,6 +626,7 @@ def get_account(account, account_id):
         data['professional_profile'] = None
         data['dating_profile'] = None
 
+    photos = []
     try:
         from backend.domains.photos.models import UserPhoto
         photos = UserPhoto.query.filter_by(account_id=account_id).order_by(
@@ -629,9 +644,43 @@ def get_account(account, account_id):
         data['photo_count'] = 0
         data['photos'] = []
 
-    data['avatar'] = _resolve_avatar(data['avatar'], dating)
+    data['avatar'] = _resolve_avatar(data['avatar'], dating, photos[0].url if photos else None)
 
     return success_response('Account loaded.', data)
+
+
+def _apply_account_status(target, new_status, reason=''):
+    """Shared by the single and bulk status endpoints: flips the status,
+    fires the in-app + email notifications, commits nothing itself (caller
+    controls the commit so bulk can do one commit for the whole batch)."""
+    target.account_status = new_status
+    target.deleted_at = datetime.utcnow() if new_status == 'closed' else None
+
+    try:
+        from backend.domains.notifications.service import create_notification
+        msgs = {
+            'suspended': ('Your account has been suspended',
+                          reason or 'Your account has been suspended for violating our community guidelines.'),
+            'active':    ('Your account has been reinstated', 'Your account is now active again. Welcome back!'),
+            'inactive':  ('Your account is now inactive', reason or 'Your account has been marked inactive.'),
+            'closed':    ('Your account has been closed', reason or 'Your account has been permanently closed.'),
+        }
+        title, body = msgs[new_status]
+        create_notification(
+            account_id=target.id,
+            notif_type=f'admin.account_{new_status}',
+            title=title, body=body,
+            data={'reason': reason}, action_url='/support',
+        )
+    except Exception:
+        pass
+
+    if target.email:
+        try:
+            from backend.shared.email.service import send_account_status_email
+            send_account_status_email(target.email, target.display_name, new_status, reason)
+        except Exception:
+            pass
 
 
 @admin_v1_bp.route('/accounts/<account_id>/status', methods=['PUT'])
@@ -658,39 +707,54 @@ def set_account_status(account, account_id):
     if target.is_admin and new_status != 'active':
         return error_response('Cannot suspend another admin account.')
 
-    target.account_status = new_status
-    target.deleted_at = datetime.utcnow() if new_status == 'closed' else None
+    _apply_account_status(target, new_status, reason)
     db.session.commit()
-
-    # In-app notification
-    try:
-        from backend.domains.notifications.service import create_notification
-        msgs = {
-            'suspended': ('Your account has been suspended',
-                          reason or 'Your account has been suspended for violating our community guidelines.'),
-            'active':    ('Your account has been reinstated', 'Your account is now active again. Welcome back!'),
-            'inactive':  ('Your account is now inactive', reason or 'Your account has been marked inactive.'),
-            'closed':    ('Your account has been closed', reason or 'Your account has been permanently closed.'),
-        }
-        title, body = msgs[new_status]
-        create_notification(
-            account_id=account_id,
-            notif_type=f'admin.account_{new_status}',
-            title=title, body=body,
-            data={'reason': reason}, action_url='/support',
-        )
-    except Exception:
-        pass
-
-    # Email notification
-    if target.email:
-        try:
-            from backend.shared.email.service import send_account_status_email
-            send_account_status_email(target.email, target.display_name, new_status, reason)
-        except Exception:
-            pass
-
     return success_response(f'Account status set to {new_status}.', target.to_dict())
+
+
+@admin_v1_bp.route('/accounts/bulk-status', methods=['PUT'])
+@_admin_required
+def bulk_set_account_status(account):
+    """
+    Apply one status to many accounts at once — the "select rows, then
+    Activate/Deactivate" bulk action. Body: account_ids: [...], status
+    (active|inactive|suspended|closed), reason?.
+
+    Silently skips (doesn't fail the whole batch for) the caller's own
+    account, other admin accounts (unless status is 'active'), and unknown
+    ids — same protections as the single-account endpoint, just tallied
+    instead of erroring, since a bulk action naturally spans a mixed
+    selection an admin didn't hand-vet row by row.
+    """
+    data = request.get_json(silent=True) or {}
+    account_ids = data.get('account_ids') or []
+    new_status = (data.get('status') or '').strip()
+    reason = (data.get('reason') or '').strip()
+
+    if not isinstance(account_ids, list) or not account_ids:
+        return error_response('account_ids must be a non-empty list.')
+    if len(account_ids) > 500:
+        return error_response('Select at most 500 accounts per batch.')
+    if new_status not in _ACCOUNT_STATUSES:
+        return error_response(f'status must be one of: {", ".join(_ACCOUNT_STATUSES)}')
+
+    targets = Account.query.filter(Account.id.in_(account_ids)).all()
+    found_ids = {t.id for t in targets}
+
+    updated, skipped = 0, 0
+    for target in targets:
+        if target.id == account.id or (target.is_admin and new_status != 'active'):
+            skipped += 1
+            continue
+        _apply_account_status(target, new_status, reason)
+        updated += 1
+    skipped += len(account_ids) - len(found_ids)  # ids that didn't resolve to a real account
+
+    db.session.commit()
+    return success_response(
+        f'{updated} account(s) set to {new_status}' + (f', {skipped} skipped.' if skipped else '.'),
+        {'updated': updated, 'skipped': skipped},
+    )
 
 
 @admin_v1_bp.route('/accounts/<account_id>/premium', methods=['PUT'])

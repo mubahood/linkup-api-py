@@ -26,6 +26,21 @@ class PhotoService:
 
         account_id = str(account.id)
 
+        # If this account has no photo anywhere yet — no avatar, no other
+        # UserPhoto row, no dating-wizard photo either — this upload becomes
+        # the profile photo regardless of what the caller sent. Otherwise a
+        # client that forgets to set is_profile_photo=true on someone's very
+        # first upload leaves them with real photos but a blank avatar
+        # (T-API: admin-upload avatar-resolution gap).
+        if not is_profile and not account.avatar:
+            has_other_photo = UserPhoto.query.filter_by(account_id=account_id).first() is not None
+            if not has_other_photo:
+                from backend.domains.profile.models import DatingProfile
+                dp = DatingProfile.query.filter_by(account_id=account_id).first()
+                has_other_photo = bool(dp and dp.photos)
+            if not has_other_photo:
+                is_profile = True
+
         # Un-set previous profile / cover so there is always at most one
         if is_profile:
             UserPhoto.query.filter_by(

@@ -250,7 +250,11 @@ class AdminAccountCreationTests(unittest.TestCase):
         self.assertTrue(photo.is_profile_photo)
         self.assertEqual(photo.url, acct.avatar)
 
-    def test_upload_gallery_photo_does_not_touch_avatar(self):
+    def test_first_gallery_photo_becomes_avatar_when_none_exists(self):
+        # An upload with no explicit is_profile_photo flag still becomes the
+        # avatar when it's genuinely the account's first photo anywhere —
+        # otherwise a caller that forgets the flag leaves real photos with a
+        # blank avatar (the exact bug this prevents).
         account_id = self._create_account()
         resp = self.client.post(
             f'/v1/admin/accounts/{account_id}/photos',
@@ -260,11 +264,55 @@ class AdminAccountCreationTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 201)
 
         acct = db.session.get(Account, account_id)
-        self.assertIsNone(acct.avatar)
+        self.assertIsNotNone(acct.avatar)
+        photo = UserPhoto.query.filter_by(account_id=account_id).first()
+        self.assertTrue(photo.is_profile_photo)
+        self.assertEqual(photo.url, acct.avatar)
+
+    def test_second_gallery_photo_does_not_touch_avatar(self):
+        account_id = self._create_account()
+        self.client.post(
+            f'/v1/admin/accounts/{account_id}/photos',
+            data={'photo': self._fake_photo('first.jpg')},
+            content_type='multipart/form-data', headers=self.admin_headers,
+        )
+        acct = db.session.get(Account, account_id)
+        first_avatar = acct.avatar
+
+        resp = self.client.post(
+            f'/v1/admin/accounts/{account_id}/photos',
+            data={'photo': self._fake_photo('second.jpg')},
+            content_type='multipart/form-data', headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 201)
+
+        db.session.refresh(acct)
+        self.assertEqual(acct.avatar, first_avatar)
+        second = UserPhoto.query.filter_by(account_id=account_id).order_by(UserPhoto.created_at.desc()).first()
+        self.assertFalse(second.is_profile_photo)
+
+    def test_gallery_upload_does_not_promote_when_dating_photos_already_exist(self):
+        account_id = self._create_account()
+        dp = DatingProfile(account_id=account_id, photos=[{'url': 'https://example.com/dating.jpg', 'caption': None}])
+        db.session.add(dp)
+        db.session.commit()
+
+        resp = self.client.post(
+            f'/v1/admin/accounts/{account_id}/photos',
+            data={'photo': self._fake_photo()},
+            content_type='multipart/form-data', headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 201)
+
+        acct = db.session.get(Account, account_id)
+        self.assertIsNone(acct.avatar)  # dating photo remains the real primary
         photo = UserPhoto.query.filter_by(account_id=account_id).first()
         self.assertFalse(photo.is_profile_photo)
 
     def test_upload_multiple_gallery_photos(self):
+        # Checked incrementally rather than sorting by created_at afterward —
+        # rapid-fire uploads can tie at second resolution, which would make
+        # a created_at-ordered assertion flaky regardless of upload order.
         account_id = self._create_account()
         for i in range(3):
             resp = self.client.post(
@@ -273,7 +321,10 @@ class AdminAccountCreationTests(unittest.TestCase):
                 content_type='multipart/form-data', headers=self.admin_headers,
             )
             self.assertEqual(resp.status_code, 201)
+            expect_profile = (i == 0)
+            self.assertEqual(resp.get_json()['data']['is_profile_photo'], expect_profile)
         self.assertEqual(UserPhoto.query.filter_by(account_id=account_id).count(), 3)
+        self.assertEqual(UserPhoto.query.filter_by(account_id=account_id, is_profile_photo=True).count(), 1)
 
 
 if __name__ == '__main__':

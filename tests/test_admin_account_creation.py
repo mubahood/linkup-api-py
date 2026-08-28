@@ -328,6 +328,50 @@ class AdminAccountCreationTests(unittest.TestCase):
         self.assertEqual(UserPhoto.query.filter_by(account_id=account_id).count(), 3)
         self.assertEqual(UserPhoto.query.filter_by(account_id=account_id, is_profile_photo=True).count(), 1)
 
+    # ── Drag-an-image-from-a-webpage (photo_url) ─────────────────────────────
+    # url_fetch.py's own SSRF/validation logic is covered exhaustively in
+    # tests/test_url_fetch.py; these just confirm the endpoint wires it up —
+    # so the network fetch itself is mocked here too.
+
+    def test_upload_from_url_saves_and_sets_avatar(self):
+        from unittest.mock import patch
+        account_id = self._create_account()
+        fake_bytes = b'\xff\xd8\xff-fake-jpeg-bytes'
+        with patch('backend.domains.photos.service.fetch_image_from_url', return_value=(fake_bytes, 'jpg')), \
+             patch('backend.domains.photos.service.save_bytes', return_value='/uploads/gallery/from-url.jpg'):
+            resp = self.client.post(
+                f'/v1/admin/accounts/{account_id}/photos',
+                data={'photo_url': 'https://example.com/nice-photo.jpg'},
+                content_type='multipart/form-data', headers=self.admin_headers,
+            )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.get_json()['data']['url'], '/uploads/gallery/from-url.jpg')
+        acct = db.session.get(Account, account_id)
+        self.assertEqual(acct.avatar, '/uploads/gallery/from-url.jpg')
+
+    def test_upload_from_url_surfaces_fetch_error_to_caller(self):
+        from unittest.mock import patch
+        from backend.shared.storage.url_fetch import ImageFetchError
+        account_id = self._create_account()
+        with patch('backend.domains.photos.service.fetch_image_from_url',
+                   side_effect=ImageFetchError('That URL points to a private or internal address and can\'t be used.')):
+            resp = self.client.post(
+                f'/v1/admin/accounts/{account_id}/photos',
+                data={'photo_url': 'http://169.254.169.254/latest/meta-data/'},
+                content_type='multipart/form-data', headers=self.admin_headers,
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('private or internal', resp.get_json()['message'])
+        self.assertEqual(UserPhoto.query.filter_by(account_id=account_id).count(), 0)
+
+    def test_upload_requires_file_or_url(self):
+        account_id = self._create_account()
+        resp = self.client.post(
+            f'/v1/admin/accounts/{account_id}/photos',
+            data={}, content_type='multipart/form-data', headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
 
 if __name__ == '__main__':
     unittest.main()

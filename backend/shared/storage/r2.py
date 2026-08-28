@@ -98,6 +98,40 @@ def save_upload(file, folder: str = 'general') -> str | None:
         return local_save(file, folder=folder)
 
 
+def save_bytes(data: bytes, ext: str, folder: str = 'general') -> str | None:
+    """Same as save_upload but for raw bytes with a known extension already
+    validated by the caller (see url_fetch.py) — used for the drag-an-image-
+    from-a-webpage flow, where there's no Werkzeug FileStorage object."""
+    ext = (ext or '').lower().lstrip('.')
+    if ext not in ALLOWED_FILE_EXTENSIONS:
+        logger.warning(f'[Storage] Rejected file extension: {ext}')
+        return None
+
+    unique_name = f'{folder}/{uuid.uuid4().hex}.{ext}'
+
+    client = _r2_client()
+    if client:
+        bucket = os.getenv('R2_BUCKET_NAME', 'linkup-media')
+        try:
+            client.put_object(
+                Bucket=bucket,
+                Key=unique_name,
+                Body=data,
+                ContentType=_content_type(ext),
+            )
+            base = os.getenv('R2_PUBLIC_BASE_URL', '').rstrip('/')
+            if base:
+                return f'{base}/{unique_name}'
+            account_id = os.getenv('R2_ACCOUNT_ID', '')
+            return f'https://{bucket}.{account_id}.r2.cloudflarestorage.com/{unique_name}'
+        except Exception as e:
+            logger.error(f'[R2] Upload failed: {e}')
+            return None
+    else:
+        from backend.shared.storage.local import save_bytes as local_save_bytes
+        return local_save_bytes(data, ext, folder=folder)
+
+
 def get_url(path: str | None) -> str | None:
     """Resolve a stored path/key to a full URL."""
     if not path:

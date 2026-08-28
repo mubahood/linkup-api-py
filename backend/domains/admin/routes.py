@@ -200,6 +200,8 @@ def list_accounts(account):
     q = request.args.get('q', '').strip()
     status = request.args.get('status', '')
     kyc_level = request.args.get('kyc_level', None, type=int)
+    gender = request.args.get('gender', '').strip()
+    district_id = request.args.get('district_id', '').strip()
 
     query = Account.query.filter(Account.deleted_at.is_(None))
     if q:
@@ -213,6 +215,14 @@ def list_accounts(account):
         query = query.filter(Account.account_status == status)
     if kyc_level is not None:
         query = query.filter(Account.kyc_level == kyc_level)
+    if gender or district_id:
+        from backend.domains.profile.models import DatingProfile as _DP
+        dp_filter = db.session.query(_DP.account_id)
+        if gender:
+            dp_filter = dp_filter.filter(_DP.gender == gender)
+        if district_id:
+            dp_filter = dp_filter.filter(_DP.district_id == district_id)
+        query = query.filter(Account.id.in_(dp_filter))
 
     query = query.order_by(Account.created_at.desc())
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
@@ -262,6 +272,13 @@ def list_accounts(account):
     )
 
 
+# 'inactive' is a soft, reversible dormancy marker (e.g. seed/demo accounts,
+# or a member gone quiet) — distinct from 'suspended' (policy violation) and
+# 'closed' (permanent, soft-deleted). Doesn't block login the way suspended
+# does today, but naturally excludes the account from admin_login's
+# `account_status != 'active'` check same as suspended already did.
+_ACCOUNT_STATUSES = ('active', 'inactive', 'suspended', 'closed')
+
 # Fields an admin may set on the nested profiles at creation time — a
 # whitelist so the request body can't mass-assign arbitrary columns.
 _DATING_PROFILE_FIELDS = {
@@ -300,6 +317,7 @@ def create_account_admin(account):
 
     Body: display_name (required), handle?, phone?, email?, password?,
     app_id? ('linkup'|'abanoonya', default 'linkup'), is_premium?,
+    account_status? (active|inactive|suspended|closed, default active),
     modes?: {professional?, sparks?}, dating_profile?: {...}, professional_profile?: {...}
 
     At least one of phone/email is required — mirrors real signup, since an
@@ -337,6 +355,10 @@ def create_account_admin(account):
     if app_id not in ('linkup', 'abanoonya'):
         return error_response('app_id must be linkup or abanoonya.', status_code=400)
 
+    account_status = (data.get('account_status') or 'active').strip()
+    if account_status not in _ACCOUNT_STATUSES:
+        return error_response(f'account_status must be one of: {", ".join(_ACCOUNT_STATUSES)}')
+
     modes_in = data.get('modes') or {}
     modes_enabled = {
         'professional': bool(modes_in.get('professional', app_id != 'abanoonya')),
@@ -360,7 +382,7 @@ def create_account_admin(account):
         email_verified=1 if email else 0,
         app_id=app_id,
         modes_enabled=modes_enabled,
-        account_status='active',
+        account_status=account_status,
         is_premium=1 if data.get('is_premium') else 0,
         avatar=(data.get('avatar') or '').strip() or None,
     )
@@ -405,7 +427,8 @@ def update_account_admin(account, account_id):
     POST /v1/admin/accounts, sharing the same request shape and the same
     field whitelists, so the create/edit form on the frontend can be one
     component. Body: display_name?, handle?, phone?, email?, password?,
-    app_id?, is_premium?, modes?: {professional?, sparks?},
+    app_id?, is_premium?, account_status? (active|inactive|suspended|closed),
+    modes?: {professional?, sparks?},
     dating_profile?: {...}, professional_profile?: {...}.
 
     Turning a mode off does NOT delete that profile's row — just flips
@@ -414,7 +437,11 @@ def update_account_admin(account, account_id):
     does not generate a new one — an untouched field means "no change").
     """
     target = db.session.get(Account, account_id)
-    if not target or target.deleted_at:
+    # No deleted_at guard here (unlike the photo/premium endpoints below) —
+    # a closed account must stay editable via account_status so it can be
+    # reactivated; blocking every edit on deleted_at would make 'closed'
+    # permanent even though it's meant to be a reversible status.
+    if not target:
         return error_response('Account not found.', status_code=404)
 
     data = request.get_json(silent=True) or {}
@@ -458,6 +485,15 @@ def update_account_admin(account, account_id):
 
     if 'is_premium' in data:
         target.is_premium = 1 if data['is_premium'] else 0
+
+    if 'account_status' in data:
+        new_status = (data.get('account_status') or '').strip()
+        if new_status not in _ACCOUNT_STATUSES:
+            return error_response(f'account_status must be one of: {", ".join(_ACCOUNT_STATUSES)}')
+        if target.is_admin and new_status != 'active':
+            return error_response('Cannot suspend another admin account.')
+        target.account_status = new_status
+        target.deleted_at = datetime.utcnow() if new_status == 'closed' else None
 
     password = (data.get('password') or '').strip()
     if password:
@@ -602,29 +638,28 @@ def get_account(account, account_id):
 @_admin_required
 def set_account_status(account, account_id):
     """
-    Set account status: active | suspended | closed.
+    Set account status: active | inactive | suspended | closed.
     Cannot suspend or modify another admin unless you are the same admin.
     """
     if account_id == account.id:
         return error_response('You cannot change your own account status.')
 
     target = db.session.get(Account, account_id)
-    if not target or target.deleted_at:
+    if not target:  # closed accounts stay reachable here so 'closed' is reversible
         return error_response('Account not found.', status_code=404)
 
     data = request.get_json(silent=True) or {}
     new_status = (data.get('status') or '').strip()
     reason = (data.get('reason') or '').strip()
 
-    if new_status not in ('active', 'suspended', 'closed'):
-        return error_response('status must be: active, suspended, or closed')
+    if new_status not in _ACCOUNT_STATUSES:
+        return error_response(f'status must be one of: {", ".join(_ACCOUNT_STATUSES)}')
 
     if target.is_admin and new_status != 'active':
         return error_response('Cannot suspend another admin account.')
 
     target.account_status = new_status
-    if new_status == 'closed':
-        target.deleted_at = datetime.utcnow()
+    target.deleted_at = datetime.utcnow() if new_status == 'closed' else None
     db.session.commit()
 
     # In-app notification
@@ -634,6 +669,7 @@ def set_account_status(account, account_id):
             'suspended': ('Your account has been suspended',
                           reason or 'Your account has been suspended for violating our community guidelines.'),
             'active':    ('Your account has been reinstated', 'Your account is now active again. Welcome back!'),
+            'inactive':  ('Your account is now inactive', reason or 'Your account has been marked inactive.'),
             'closed':    ('Your account has been closed', reason or 'Your account has been permanently closed.'),
         }
         title, body = msgs[new_status]

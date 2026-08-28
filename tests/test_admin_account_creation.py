@@ -200,6 +200,29 @@ class AdminAccountCreationTests(unittest.TestCase):
     def _fake_photo(self, name='photo.jpg'):
         return (io.BytesIO(b'not-a-real-image-just-test-bytes'), name)
 
+    def test_account_status_defaults_to_active(self):
+        resp = self.client.post('/v1/admin/accounts', json={
+            'display_name': 'Jane Doe', 'phone': self._phone(),
+        }, headers=self.admin_headers)
+        data = resp.get_json()['data']
+        self.created_account_ids.append(data['id'])
+        self.assertEqual(data['account_status'], 'active')
+
+    def test_account_status_can_be_set_at_creation(self):
+        resp = self.client.post('/v1/admin/accounts', json={
+            'display_name': 'Jane Doe', 'phone': self._phone(), 'account_status': 'inactive',
+        }, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 201)
+        data = resp.get_json()['data']
+        self.created_account_ids.append(data['id'])
+        self.assertEqual(data['account_status'], 'inactive')
+
+    def test_account_status_rejects_invalid_value_at_creation(self):
+        resp = self.client.post('/v1/admin/accounts', json={
+            'display_name': 'Jane Doe', 'phone': self._phone(), 'account_status': 'bogus',
+        }, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 400)
+
     def test_upload_photo_requires_admin(self):
         account_id = self._create_account()
         resp = self.client.post(f'/v1/admin/accounts/{account_id}/photos',

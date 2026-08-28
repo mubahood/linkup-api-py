@@ -142,6 +142,52 @@ def stats(account):
 
 # ─── Account Management ───────────────────────────────────────────────────────
 
+def _dating_photo_url(entry):
+    """dp.photos entries are normally {'url', 'caption'} dicts (see
+    sparks/routes.py's photo endpoints) but tolerate a bare string too, in
+    case an older client version ever wrote one directly."""
+    return entry.get('url') if isinstance(entry, dict) else entry
+
+
+def _dating_photo_entries(dp):
+    """Turn a DatingProfile's `photos` JSON array into the same shape as
+    UserPhoto.to_dict(), with a synthetic id ('dating:<index>') the delete
+    endpoint recognizes — index-based, same convention sparks/routes.py's own
+    DELETE /sparks/profile/photos/<photo_index> already uses, so this isn't
+    a new scheme, just the existing one reused for the admin surface."""
+    if not dp or not dp.photos:
+        return []
+    return [
+        {
+            'id': f'dating:{i}',
+            'url': _dating_photo_url(entry),
+            'is_profile_photo': i == 0,
+            'is_cover_photo': False,
+            'is_public': True,
+            'caption': entry.get('caption') if isinstance(entry, dict) else None,
+            'photo_type': 'dating',
+            'sort_order': i,
+            'created_at': None,
+        }
+        for i, entry in enumerate(dp.photos)
+    ]
+
+
+def _resolve_avatar(account_avatar, dp):
+    """Account.avatar is the professional/general avatar; a Sparks-only
+    member typically never sets it — their real main photo is the first
+    entry in DatingProfile.photos (see profile/routes.py's own comment on
+    `dating_photos`: 'the dating wizard uploads here, not to account.avatar,
+    so this is the real main photo source for a dating-only account'). The
+    admin console must fall back to it the same way, or it just shows a
+    blank avatar for someone who very much has a photo."""
+    if account_avatar:
+        return account_avatar
+    if dp and dp.photos:
+        return _dating_photo_url(dp.photos[0])
+    return None
+
+
 @admin_v1_bp.route('/accounts', methods=['GET'])
 @_admin_required
 def list_accounts(account):
@@ -197,8 +243,11 @@ def list_accounts(account):
 
     def _row(a):
         d = a.to_dict()
-        d['photo_count'] = photo_counts.get(a.id, 0)
         dp = dating_by_account.get(a.id)
+        # UserPhoto count + dating_profile.photos count — two genuinely
+        # separate storage paths (see _resolve_avatar), both real photos.
+        d['photo_count'] = photo_counts.get(a.id, 0) + (len(dp.photos) if dp and dp.photos else 0)
+        d['avatar'] = _resolve_avatar(d['avatar'], dp)
         d['dating_profile_summary'] = None if not dp else {
             'age': (_date.today().year - dp.birth_year) if dp.birth_year else None,
             'gender': dp.gender,
@@ -474,10 +523,31 @@ def upload_account_photo(account, account_id):
 def delete_account_photo(account, account_id, photo_id):
     """Delete one of a target account's photos — reuses PhotoService.delete_photo,
     which also auto-promotes the next-most-recent photo to profile/cover if
-    the deleted one held that role."""
+    the deleted one held that role.
+
+    A `dating:<index>` id (see _dating_photo_entries) refers to an entry in
+    DatingProfile.photos rather than a UserPhoto row, so it's handled here
+    directly instead of via PhotoService."""
     target = db.session.get(Account, account_id)
     if not target or target.deleted_at:
         return error_response('Account not found.', status_code=404)
+
+    if photo_id.startswith('dating:'):
+        from backend.domains.profile.models import DatingProfile
+        dp = DatingProfile.query.filter_by(account_id=account_id).first()
+        if not dp or not dp.photos:
+            return error_response('Photo not found.', status_code=404)
+        try:
+            idx = int(photo_id.split(':', 1)[1])
+        except ValueError:
+            return error_response('Photo not found.', status_code=404)
+        photos = list(dp.photos)
+        if idx < 0 or idx >= len(photos):
+            return error_response('Photo not found.', status_code=404)
+        photos.pop(idx)
+        dp.photos = photos
+        db.session.commit()
+        return success_response('Photo deleted.')
 
     from backend.domains.photos.service import PhotoService
     return PhotoService.delete_photo(target, photo_id)
@@ -495,6 +565,7 @@ def get_account(account, account_id):
     data = target.to_dict()
     data['report_count'] = Report.query.filter_by(target_account_id=account_id).count()
 
+    dating = None
     try:
         from backend.domains.profile.models import ProfessionalProfile, DatingProfile
         prof = ProfessionalProfile.query.filter_by(account_id=account_id).first()
@@ -511,11 +582,18 @@ def get_account(account, account_id):
             UserPhoto.is_profile_photo.desc(), UserPhoto.sort_order.asc(),
             UserPhoto.created_at.desc(),
         ).all()
-        data['photo_count'] = len(photos)
-        data['photos'] = [p.to_dict() for p in photos]
+        # UserPhoto rows AND DatingProfile.photos are both real, separate
+        # photo stores for this account (see _resolve_avatar) — surface
+        # both here or a Sparks member's actual photos silently disappear
+        # from the admin console despite genuinely existing.
+        dating_entries = _dating_photo_entries(dating)
+        data['photos'] = [p.to_dict() for p in photos] + dating_entries
+        data['photo_count'] = len(data['photos'])
     except Exception:
         data['photo_count'] = 0
         data['photos'] = []
+
+    data['avatar'] = _resolve_avatar(data['avatar'], dating)
 
     return success_response('Account loaded.', data)
 

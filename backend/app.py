@@ -91,7 +91,6 @@ def create_app():
     from backend.routes.profile import profile_bp
     from backend.routes.wallet import wallet_bp
     from backend.routes.chat import chat_bp
-    from backend.routes.admin import admin_bp
     from backend.routes.calls import calls_bp
     from backend.routes.ratings import ratings_bp
     from backend.routes.flutterwave import flutterwave_bp
@@ -100,7 +99,13 @@ def create_app():
     app.register_blueprint(profile_bp)
     app.register_blueprint(wallet_bp)
     app.register_blueprint(chat_bp)
-    app.register_blueprint(admin_bp)
+    # backend.routes.admin (legacy AdminUser-based admin panel) intentionally
+    # NOT registered — a second, parallel admin-auth surface with its own
+    # login/password check, superseded by backend/domains/admin (real admin
+    # console, is_admin on the same Account model as everyone else). Its
+    # admin_users table is empty on production (verified), so this was dead
+    # but still-reachable attack surface; disabled rather than deleted in
+    # case anything in backend/routes still imports from it.
     app.register_blueprint(calls_bp)
     app.register_blueprint(ratings_bp)
     app.register_blueprint(flutterwave_bp)
@@ -119,14 +124,19 @@ def create_app():
     from backend.domains.safety.routes import safety_bp
     from backend.domains.search.routes import search_bp
     from backend.domains.reference.routes import reference_bp
+    from backend.domains.app_version.routes import app_version_bp
     from backend.domains.feed.routes import feed_bp
     from backend.domains.wallet.routes import wallet_bp as wallet_v1_bp
     from backend.domains.wallet.gift_routes import gifts_bp
+    from backend.domains.subscriptions.routes import subscriptions_bp
     from backend.domains.endorsements.routes import endorsements_bp
     from backend.domains.admin.routes import admin_v1_bp
     from backend.domains.mentorship.routes import mentorship_bp
     from backend.domains.photos.routes import photos_bp
     from backend.domains.posts.routes import posts_bp
+    from backend.domains.listings.routes import listings_bp
+    from backend.domains.listings.claim_routes import listing_claims_bp
+    from backend.domains.legal.routes import legal_bp
 
     app.register_blueprint(identity_bp)
     app.register_blueprint(v1_profile_bp)
@@ -141,14 +151,19 @@ def create_app():
     app.register_blueprint(safety_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(reference_bp)
+    app.register_blueprint(app_version_bp)
     app.register_blueprint(feed_bp)
     app.register_blueprint(wallet_v1_bp)
     app.register_blueprint(gifts_bp)
+    app.register_blueprint(subscriptions_bp)
     app.register_blueprint(endorsements_bp)
     app.register_blueprint(admin_v1_bp)
     app.register_blueprint(mentorship_bp)
     app.register_blueprint(photos_bp)
     app.register_blueprint(posts_bp)
+    app.register_blueprint(listings_bp)
+    app.register_blueprint(listing_claims_bp)
+    app.register_blueprint(legal_bp)
 
     # Register Socket.IO call signaling events
     from backend.sockets.call_events import register_call_events
@@ -184,7 +199,7 @@ def create_app():
         }), 200
 
     # Deliberate-failure probe (debug only) — verifies the JSON error envelope.
-    if os.getenv('FLASK_DEBUG', 'true').lower() in ('1', 'true', 'yes', 'on'):
+    if os.getenv('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes', 'on'):
         @app.route('/v1/_debug/boom', methods=['GET'])
         def _debug_boom():
             raise RuntimeError('intentional failure for T-API-042 envelope test')
@@ -311,6 +326,6 @@ if __name__ == '__main__':
         app,
         host=Config.SERVER_HOST,
         port=port,
-        debug=os.getenv('FLASK_DEBUG', 'true').lower() == 'true',
+        debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true',
         allow_unsafe_werkzeug=True,
     )

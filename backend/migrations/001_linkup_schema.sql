@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS lu_professional_profiles (
     headline VARCHAR(500) NULL,
     bio TEXT NULL,
     seniority ENUM('student', 'entry', 'mid', 'senior', 'lead', 'executive', 'founder') DEFAULT 'entry',
-    current_role VARCHAR(300) NULL,
+    `current_role` VARCHAR(300) NULL,
     current_org_id VARCHAR(36) NULL,
     visibility_mode ENUM('public', 'members', 'links_only', 'self_only') DEFAULT 'public',
     open_to JSON NULL,

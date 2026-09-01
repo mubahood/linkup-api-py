@@ -89,11 +89,16 @@ def transactions(account):
 @wallet_bp.route('/topup', methods=['POST'])
 @lu_jwt_required
 def topup(account):
-    """Buy coins with mobile money / card. Body: { amount: UGX }.
-    Returns a Flutterwave hosted-payment link; coins are credited only after the
-    payment is verified (webhook or redirect-verify)."""
+    """Buy coins with mobile money / card. Body: { amount: UGX, payment_method? }.
+    payment_method is 'mobilemoney' or 'card' — omit it to fall back to
+    Flutterwave's own method-picker page. Returns a Flutterwave hosted-payment
+    link; coins are credited only after the payment is verified (webhook or
+    redirect-verify)."""
+    from backend.services.flutterwave_service import FlutterwaveService
+
     data = request.get_json(silent=True) or {}
     amount = data.get('amount', 0)
+    payment_method = (data.get('payment_method') or '').strip().lower()
     min_topup = _cfg('MIN_TOPUP_UGX', 500)
     try:
         amount = float(amount)
@@ -101,6 +106,12 @@ def topup(account):
         return error_response('Invalid amount.')
     if amount < min_topup:
         return error_response(f'Minimum top-up is UGX {min_topup:,.0f}.')
+    if payment_method and payment_method not in FlutterwaveService.PAYMENT_METHODS:
+        return error_response('Choose either mobile money or card.')
+    if payment_method == 'mobilemoney' and not (account.phone or '').strip():
+        return error_response(
+            'Add your phone number first so we know where to send the mobile '
+            'money request.', status_code=422, data={'reason': 'phone_required'})
 
     wallet = _get_or_create_wallet(account.id)
     tx_ref = f'LU-TOPUP-{uuid.uuid4().hex[:10].upper()}'
@@ -108,14 +119,13 @@ def topup(account):
     coins = int(amount // coin_rate)
 
     # Pending ledger row (no balance change yet — coins credit on verify).
-    _ledger(wallet, account.id, type_='credit', category='coin_purchase',
+    pending_tx = _ledger(wallet, account.id, type_='credit', category='coin_purchase',
             amount=amount, balance_after=float(wallet.balance), reference=tx_ref,
             description=f'Buy {coins} coins', status='pending',
             extra={'coins': coins, 'kind': 'topup'})
     db.session.commit()
 
     try:
-        from backend.services.flutterwave_service import FlutterwaveService
         flw = FlutterwaveService()
         redirect_url = (_cfg('APP_URL', 'http://localhost:5001')
                         + f'/v1/wallet/topup/{tx_ref}/verify')
@@ -125,6 +135,7 @@ def topup(account):
             customer_email=account.email or f'{account.handle}@linkup.app',
             customer_phone=account.phone or '',
             redirect_url=redirect_url, currency='UGX',
+            payment_options=FlutterwaveService.PAYMENT_METHODS.get(payment_method),
             description=f'LinkUp coins ({coins})',
             meta={'account_id': account.id, 'kind': 'topup', 'coins': coins},
         )
@@ -133,21 +144,38 @@ def topup(account):
             'amount': amount, 'coins': coins, 'currency': 'UGX',
         })
     except Exception as e:
+        # Don't leave a dead 'pending' ledger row behind — nothing will ever
+        # verify or webhook against a tx_ref that never reached Flutterwave.
+        pending_tx.status = 'cancelled'
+        db.session.commit()
+        current_app.logger.error(f'[wallet.topup] {tx_ref}: {e}')
         return error_response(
-            f'Payment provider unavailable. Reference {tx_ref}. {e}', status_code=502)
+            f'Payments are temporarily unavailable. Reference {tx_ref} — '
+            'please try again shortly.', status_code=502)
 
 
 def _complete_topup(tx) -> dict:
-    """Idempotently credit coins for a verified pending top-up tx (under lock)."""
-    if tx.status == 'completed':
-        return {'already': True}
+    """Idempotently credit coins for a verified pending top-up tx (under lock).
+
+    The redirect-verify path (verify_topup) and the Flutterwave webhook both
+    call this for the same tx_ref, often within moments of each other — a
+    normal race, not an edge case. Each caller's own `tx.status == 'pending'`
+    check happens WITHOUT a lock, so both can pass it before either commits.
+    The actual guarantee lives here: re-fetch and lock the transaction row
+    itself, and re-check status only after the lock is held, atomically with
+    the wallet credit — not the caller's earlier unlocked read of `tx`.
+    """
+    locked_tx = WalletTransaction.query.filter_by(id=tx.id).with_for_update().first()
+    if not locked_tx or locked_tx.status == 'completed':
+        wallet = _get_or_create_wallet(tx.account_id)
+        return {'already': True, 'coins': int(wallet.coins)}
     wallet = WalletAccount.query.filter_by(
-        account_id=tx.account_id).with_for_update().first()
-    coins = int((tx.extra_data or {}).get('coins') or 0)
+        account_id=locked_tx.account_id).with_for_update().first()
+    coins = int((locked_tx.extra_data or {}).get('coins') or 0)
     wallet.coins = int(wallet.coins or 0) + coins
-    wallet.total_credited = float(wallet.total_credited or 0) + float(tx.amount)
-    tx.status = 'completed'
-    tx.balance_after = float(wallet.balance)
+    wallet.total_credited = float(wallet.total_credited or 0) + float(locked_tx.amount)
+    locked_tx.status = 'completed'
+    locked_tx.balance_after = float(wallet.balance)
     db.session.commit()
     return {'coins_added': coins, 'coins': int(wallet.coins)}
 
@@ -346,21 +374,30 @@ def withdraw(account):
 
 
 def _reverse_withdrawal(wd: Withdrawal, reason: str):
-    """Refund a failed withdrawal back to the wallet (idempotent on status)."""
-    if wd.status in ('reversed', 'paid'):
+    """Refund a failed withdrawal back to the wallet (idempotent on status).
+
+    Called from both the synchronous payout-init exception handler and the
+    Flutterwave transfer webhook — the same withdrawal can legitimately be
+    reversed from both paths within moments of each other. The caller's own
+    `wd.status` read is unlocked, so re-fetch and lock the withdrawal row
+    itself and re-check status only after the lock is held, atomically with
+    the refund — otherwise two concurrent reversals both refund once each,
+    crediting the member's wallet twice for one withdrawal."""
+    locked_wd = Withdrawal.query.filter_by(id=wd.id).with_for_update().first()
+    if not locked_wd or locked_wd.status in ('reversed', 'paid'):
         return
     wallet = WalletAccount.query.filter_by(
-        account_id=wd.account_id).with_for_update().first()
-    refund = float(wd.amount_ugx) + float(wd.fee_ugx or 0)
+        account_id=locked_wd.account_id).with_for_update().first()
+    refund = float(locked_wd.amount_ugx) + float(locked_wd.fee_ugx or 0)
     wallet.balance = float(wallet.balance) + refund
     wallet.total_debited = max(0.0, float(wallet.total_debited or 0) - refund)
-    wd.status = 'reversed'
-    wd.failure_reason = (reason or '')[:300]
-    wd.settled_at = datetime.utcnow()
-    _ledger(wallet, wd.account_id, type_='credit', category='withdrawal_reversal',
+    locked_wd.status = 'reversed'
+    locked_wd.failure_reason = (reason or '')[:300]
+    locked_wd.settled_at = datetime.utcnow()
+    _ledger(wallet, locked_wd.account_id, type_='credit', category='withdrawal_reversal',
             amount=refund, balance_after=float(wallet.balance),
-            reference=wd.flw_reference, description='Withdrawal reversed',
-            status='completed', extra={'withdrawal_id': wd.id})
+            reference=locked_wd.flw_reference, description='Withdrawal reversed',
+            status='completed', extra={'withdrawal_id': locked_wd.id})
     db.session.commit()
 
 

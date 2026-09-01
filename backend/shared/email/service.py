@@ -17,15 +17,19 @@ logger = logging.getLogger(__name__)
 
 
 # ─── Multi-app branding ───────────────────────────────────────────────────────
-# The same backend serves multiple apps (LinkUp, Abanoonya Pro). The client
-# identifies itself with an `X-App` header. Branding defaults to LinkUp when the
-# header is absent, so existing LinkUp behaviour is completely unchanged.
+# The same backend serves multiple apps (LinkUp, Abanoonya Pro, Uganda Dating
+# App). The client identifies itself with an `X-App` header. Branding defaults
+# to LinkUp when the header is absent, so existing LinkUp behaviour is
+# completely unchanged.
 _APP_BRANDS = {
-    'linkup':            'LinkUp',
-    'app.linkup.mobile': 'LinkUp',
-    'abanoonya':         'Abanoonya Pro',
-    'abanoonya.pro':     'Abanoonya Pro',
-    'app.abanoonya.pro': 'Abanoonya Pro',
+    'linkup':               'LinkUp',
+    'app.linkup.mobile':    'LinkUp',
+    'abanoonya':            'Abanoonya Pro',
+    'abanoonya.pro':        'Abanoonya Pro',
+    'app.abanoonya.pro':    'Abanoonya Pro',
+    'uganda_dating':        'Uganda Dating App',
+    'ugandadating':         'Uganda Dating App',
+    'app.ugandadating.app': 'Uganda Dating App',
 }
 
 

@@ -21,9 +21,8 @@ def _opts(*pairs):
 GENDER = _opts(("male", "Man"), ("female", "Woman"))
 
 ORIENTATION = _opts(
-    ("straight", "Straight"), ("gay", "Gay"), ("lesbian", "Lesbian"),
-    ("bisexual", "Bisexual"), ("pansexual", "Pansexual"), ("asexual", "Asexual"),
-    ("queer", "Queer"), ("questioning", "Questioning"), ("prefer_not", "Prefer not to say"),
+    ("straight", "Straight"), ("gay", "Gay"), ("bisexual", "Bisexual"),
+    ("prefer_not", "Prefer not to say"),
 )
 
 RELATIONSHIP_GOAL = _opts(
@@ -123,10 +122,11 @@ BODY_TYPE = _opts(
 )
 
 ZODIAC = _opts(
-    ("aries", "Aries"), ("taurus", "Taurus"), ("gemini", "Gemini"), ("cancer", "Cancer"),
-    ("leo", "Leo"), ("virgo", "Virgo"), ("libra", "Libra"), ("scorpio", "Scorpio"),
-    ("sagittarius", "Sagittarius"), ("capricorn", "Capricorn"),
-    ("aquarius", "Aquarius"), ("pisces", "Pisces"),
+    ("aries", "♈ Aries"), ("taurus", "♉ Taurus"), ("gemini", "♊ Gemini"),
+    ("cancer", "♋ Cancer"), ("leo", "♌ Leo"), ("virgo", "♍ Virgo"),
+    ("libra", "♎ Libra"), ("scorpio", "♏ Scorpio"), ("sagittarius", "♐ Sagittarius"),
+    ("capricorn", "♑ Capricorn"), ("aquarius", "♒ Aquarius"), ("pisces", "♓ Pisces"),
+    ("unknown", "Not sure"),
 )
 
 PERSONALITY_TYPE = _opts(*[(t.lower(), t) for t in [

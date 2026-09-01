@@ -278,7 +278,7 @@ def register_call_events(socketio, app):
 
                 emit('authenticated', {
                     'user_id': user_id,
-                    'name': user.name,
+                    'name': user_display,
                 })
 
                 # Check if user was disconnected from an active call

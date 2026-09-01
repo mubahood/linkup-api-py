@@ -1,12 +1,32 @@
 """
 Sparks service: deck generation, match creation.
 """
+from __future__ import annotations
+import math
+import random
 import uuid
 from sqlalchemy import or_
 from backend.models import db
 from backend.domains.sparks.models import Spark, Match
 from backend.domains.identity.models import Account
 from backend.domains.profile.models import DatingProfile
+
+
+def _fuzzed_coords(lat, lng, radius_km: float = 1.5):
+    """Randomized offset within radius_km, regenerated fresh on every call —
+    never derived from a stored value, so it can't be triangulated by
+    diffing across requests. Used for map-browse pins; never expose a
+    candidate's real last_lat/last_lng to another member (stalking risk)."""
+    if lat is None or lng is None:
+        return None, None
+    lat, lng = float(lat), float(lng)
+    angle = random.uniform(0, 2 * math.pi)
+    # Uniform-in-disk sampling (sqrt), not uniform-in-radius, so points
+    # don't cluster near the center.
+    dist_km = radius_km * math.sqrt(random.uniform(0, 1))
+    dlat = (dist_km / 111.0) * math.cos(angle)
+    dlng = (dist_km / (111.0 * math.cos(math.radians(lat)))) * math.sin(angle)
+    return round(lat + dlat, 6), round(lng + dlng, 6)
 
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -52,8 +72,73 @@ def _gender_token_set(values):
     return out or None
 
 
+def _learned_preference_boost(account_id: str, candidate_ids: list) -> dict:
+    """Nudge deck ranking using the account's OWN swipe history — likes and
+    dislikes are implicit feedback layered on top of the static, self-
+    declared Interest Graph compatibility from rank_candidates(). Content-
+    based, not a new ML pipeline: reuses the same InterestProfile/
+    InterestTag weights the declared-preference score already reads, this
+    just aggregates them across everyone the account has liked vs disliked
+    and looks for candidates who share tags with the liked side more than
+    the disliked side.
+
+    Deliberately conservative in two ways: (1) a no-op until there's real
+    signal (MIN_SIGNAL combined swipes) — a brand-new account's first few
+    taps shouldn't lurch the deck around; (2) bounded to +/-MAX_ADJUSTMENT,
+    so behavior can only ever nudge the declared-preference score, never
+    override it or hard-exclude anyone. This never affects the professional
+    Links surface — it's applied here in sparks/service.py, not in the
+    shared recommend/interest_graph seam those surfaces also use."""
+    from backend.domains.interest.models import InterestProfile
+
+    MIN_SIGNAL = 8
+    HISTORY_LIMIT = 150  # most-recent per bucket — old taste shouldn't dominate forever
+    MAX_ADJUSTMENT = 0.15
+
+    liked_ids = [s.target_id for s in Spark.query.filter(
+        Spark.actor_id == account_id, Spark.action.in_(('spark_up', 'standout')),
+    ).order_by(Spark.created_at.desc()).limit(HISTORY_LIMIT).all()]
+    disliked_ids = [s.target_id for s in Spark.query.filter(
+        Spark.actor_id == account_id, Spark.action == 'pass',
+    ).order_by(Spark.created_at.desc()).limit(HISTORY_LIMIT).all()]
+
+    total_history = len(liked_ids) + len(disliked_ids)
+    if total_history < MIN_SIGNAL:
+        return {}
+
+    liked_set, disliked_set = set(liked_ids), set(disliked_ids)
+    rows = InterestProfile.query.filter(
+        InterestProfile.account_id.in_(liked_ids + disliked_ids)
+    ).all()
+    tag_signal: dict = {}
+    for ip in rows:
+        w = float(ip.weight or 0.5)
+        if ip.account_id in liked_set:
+            tag_signal[ip.tag_id] = tag_signal.get(ip.tag_id, 0.0) + w
+        elif ip.account_id in disliked_set:
+            tag_signal[ip.tag_id] = tag_signal.get(ip.tag_id, 0.0) - w
+    if not tag_signal:
+        return {}
+
+    cand_rows = InterestProfile.query.filter(
+        InterestProfile.account_id.in_(candidate_ids)
+    ).all()
+    raw: dict = {}
+    for ip in cand_rows:
+        signal = tag_signal.get(ip.tag_id)
+        if signal is None:
+            continue
+        raw[ip.account_id] = raw.get(ip.account_id, 0.0) + float(ip.weight or 0.5) * signal
+
+    return {
+        cid: max(-MAX_ADJUSTMENT, min(MAX_ADJUSTMENT, v / total_history))
+        for cid, v in raw.items()
+    }
+
+
 def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
-             max_distance_km: float = None, filters: dict = None) -> list:
+             max_distance_km: float = None, filters: dict = None,
+             extra_excluded: set = None) -> list:
     """
     Generate a discovery deck ordered by Interest Graph compatibility.
 
@@ -63,6 +148,9 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
     - Heavily-reported accounts
     - Self
     - Paused / incognito profiles (discoverability)
+    - extra_excluded, if given — a caller-supplied set of ids to skip on top
+      of the above (e.g. the sparks/notification-candidate route excluding
+      whoever has already been shown this "Next" cycling session)
 
     Filters:
     - Actor's age preference vs candidate's birth_year
@@ -100,7 +188,7 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
     )
     reported_ids = {row[0] for row in reported_counts}
 
-    excluded = acted_ids | blocked_ids | reported_ids | {account_id}
+    excluded = acted_ids | blocked_ids | reported_ids | {account_id} | (extra_excluded or set())
 
     # Load the actor's own dating profile up front — needed to decide the
     # default gender (opposite sex) before we build the candidate query.
@@ -299,39 +387,76 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
                       or f_has_photos or f_verified
                       or f_age_min is not None or f_age_max is not None)
     rank_score = dict(ranked)
-    rank_pos = {cid: i for i, (cid, _) in enumerate(ranked)}
+
+    # Nudge with the account's own like/dislike history (see docstring on
+    # _learned_preference_boost) before deriving position/order from it, so
+    # both the deck order and the displayed compatibility_pct reflect it.
+    pref_boost = _learned_preference_boost(account_id, candidate_ids)
+    if pref_boost:
+        rank_score = {
+            cid: max(0.0, min(1.0, s + pref_boost.get(cid, 0.0)))
+            for cid, s in rank_score.items()
+        }
+    rank_pos = {cid: i for i, (cid, _) in
+                enumerate(sorted(rank_score.items(), key=lambda x: -x[1]))}
     ordered_ids = list(acc_map.keys())
+
+    # Deliberate anti-gaming jitter: "closest match first" stays true at a
+    # coarse level (band width 3), but WHO ends up first within a band is
+    # re-randomized on every call. Without this, a candidate could infer
+    # "I'm always shown 4th" and reason about their own visibility/ranking —
+    # a small, bounded shuffle removes that signal without hurting match
+    # quality (never crosses a band boundary, gender filtering untouched).
+    def _band(n, width=3):
+        return n // width
+
     if any_filter:
         ordered_ids.sort(key=lambda cid: (
-            -_match_score(acc_map[cid], dating_map[cid]),
-            rank_pos.get(cid, 10 ** 9),
+            _band(-_match_score(acc_map[cid], dating_map[cid]), 5),
+            _band(rank_pos.get(cid, 10 ** 9), 3),
+            random.random(),
         ))
     else:
-        ordered_ids.sort(key=lambda cid: rank_pos.get(cid, 10 ** 9))
+        ordered_ids.sort(key=lambda cid: (_band(rank_pos.get(cid, 10 ** 9), 3), random.random()))
 
     # Batch-fetch interest tags for all candidates
     candidate_ids_set = set(acc_map.keys())
     interest_map: dict = {}
     try:
-        from backend.domains.interest.models import AccountInterest, Interest
-        rows = db.session.query(AccountInterest, Interest).join(
-            Interest, Interest.id == AccountInterest.interest_id
-        ).filter(AccountInterest.account_id.in_(candidate_ids_set)).all()
-        for ai, interest in rows:
-            interest_map.setdefault(ai.account_id, []).append({
-                'id': interest.id,
-                'display_name_en': interest.display_name_en,
+        from backend.domains.interest.models import InterestProfile, InterestTag
+        rows = db.session.query(InterestProfile, InterestTag).join(
+            InterestTag, InterestTag.id == InterestProfile.tag_id
+        ).filter(InterestProfile.account_id.in_(candidate_ids_set)).all()
+        for ip, tag in rows:
+            interest_map.setdefault(ip.account_id, []).append({
+                'id': tag.id,
+                'display_name_en': tag.display_name_en,
             })
+    except Exception:
+        pass
+
+    # Who's already been expanded/viewed — lets the grid/list browse view mark
+    # a card "Viewed" instead of looking identical to one never opened.
+    viewed_ids: set = set()
+    try:
+        from backend.shared.events.models import BehavioralEvent
+        viewed_ids = {
+            row[0] for row in db.session.query(BehavioralEvent.object_id).filter(
+                BehavioralEvent.account_id == account_id,
+                BehavioralEvent.verb == 'profile.view',
+                BehavioralEvent.object_id.in_(candidate_ids_set),
+            ).distinct().all()
+        }
     except Exception:
         pass
 
     # Actor's own interest ids — for the "why you're seeing this" reason (T-API-052)
     my_interest_ids: set = set()
     try:
-        from backend.domains.interest.models import AccountInterest
+        from backend.domains.interest.models import InterestProfile
         my_interest_ids = {
-            ai.interest_id for ai in
-            AccountInterest.query.filter_by(account_id=account_id).all()
+            ip.tag_id for ip in
+            InterestProfile.query.filter_by(account_id=account_id).all()
         }
     except Exception:
         pass
@@ -347,15 +472,32 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
         lead = 'Strong match' if pct >= 75 else ('Good match' if pct >= 50 else 'Worth a look')
         return f'{lead} · ' + ' · '.join(bits) if bits else lead
 
-    # Sensitive fields that must never appear on swipe cards
+    # Sensitive fields that must never appear on swipe cards. last_lat/last_lng
+    # in particular must never leak a candidate's real coordinates to another
+    # member — map-browse uses a freshly-fuzzed map_lat/map_lng instead (added
+    # below), never the raw value.
     _STRIP = {'phone', 'email', 'email_verified', 'phone_verified',
               'kyc_level', 'modes_enabled', 'location_id', 'reputation_score',
-              'cover_photo', 'is_online', 'last_seen_at', 'updated_at', 'created_at'}
+              'cover_photo', 'is_online', 'last_seen_at', 'updated_at', 'created_at',
+              'last_lat', 'last_lng'}
 
     # Preference compatibility (P-API-07): load the viewer's prefs once.
     from backend.shared.json_safe import as_obj
     from backend.domains.recommend.preference_match import compatibility as _compat
     _my_prefs = as_obj(actor_dating.preferences) if actor_dating else {}
+
+    # Map-browse fallback: most members set a district during onboarding but
+    # never complete optional GPS verification. Batch-fetch district
+    # centroids once so map-browse can still place them (fuzzed same as a
+    # real GPS reading) instead of only showing the small minority with
+    # last_lat/last_lng set.
+    from backend.domains.reference.models import Location
+    district_ids = {dp.district_id for dp in dating_map.values() if dp.district_id}
+    district_coords = {}
+    if district_ids:
+        for loc in Location.query.filter(Location.id.in_(district_ids)).all():
+            if loc.latitude is not None and loc.longitude is not None:
+                district_coords[loc.id] = (float(loc.latitude), float(loc.longitude))
 
     result = []
     for cid in ordered_ids[:limit]:
@@ -364,8 +506,22 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
         if not acc:
             continue
         card = {k: v for k, v in acc.to_dict().items() if k not in _STRIP}
+        # A boolean, not the raw kyc_level, so the "verified" badge can work
+        # without leaking the actual numeric level to other members.
+        card['is_verified'] = bool((acc.kyc_level or 0) >= 2)
         dating = dating_map.get(cid)
-        dp_dict = dating.to_dict() if dating else None
+        map_lat, map_lng = acc.last_lat, acc.last_lng
+        if (map_lat is None or map_lng is None) and dating and dating.district_id:
+            fallback = district_coords.get(dating.district_id)
+            if fallback:
+                map_lat, map_lng = fallback
+        card['map_lat'], card['map_lng'] = _fuzzed_coords(map_lat, map_lng)
+        # include_sensitive=False — the viewer here is never the profile
+        # owner, so religion/religiosity/tribe_ethnicity/politics must only
+        # appear if the profile owner opted each one in via sensitive_optin
+        # (previously this always passed the True default, leaking those
+        # fields to every viewer regardless of the owner's choice).
+        dp_dict = dating.to_dict(include_sensitive=False) if dating else None
         card['dating_profile'] = dp_dict
         # Bidirectional preference match for the card (P-API-07).
         if actor_dating and dating:
@@ -379,6 +535,7 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
         card['photos'] = photos
         card['compatibility_score'] = round(score, 3)
         card['compatibility_pct'] = min(99, max(1, round(score * 100)))
+        card['has_viewed'] = cid in viewed_ids
         cand_ids = {t['id'] for t in interest_map.get(cid, [])}
         shared = len(my_interest_ids & cand_ids)
         card['shared_interest_count'] = shared
@@ -391,7 +548,138 @@ def get_deck(account_id: str, limit: int = 20, allow_passed: bool = False,
 # Sensitive fields that must never appear on a discovery card.
 _CARD_STRIP = {'phone', 'email', 'email_verified', 'phone_verified',
                'kyc_level', 'modes_enabled', 'location_id', 'reputation_score',
-               'cover_photo', 'is_online', 'last_seen_at', 'updated_at', 'created_at'}
+               'cover_photo', 'is_online', 'last_seen_at', 'updated_at', 'created_at',
+               'last_lat', 'last_lng'}
+
+
+def get_profile_card(account_id: str, target_id: str) -> dict | None:
+    """Single-target equivalent of a get_deck() card, for the profile-detail
+    screen — reached from a notification tap, profile-viewers, search
+    results, or "View full profile" from the swipe deck, all of which
+    already know exactly which account they want, not a fresh ranked pool.
+
+    Deliberately not built on get_deck()'s pool/exclusion/anti-gaming
+    machinery — that exists to rank many candidates against each other,
+    which doesn't apply to fetching one already-known target. This
+    duplicates a modest amount of get_deck()'s card-assembly logic rather
+    than forcing a shared extraction that would risk destabilizing that
+    complex, working function for a small win.
+
+    Returns None if self, not found, inactive/non-discoverable, or blocked
+    in either direction — callers should treat that as a 404.
+    """
+    if account_id == target_id:
+        return None
+
+    from backend.domains.safety.models import Block
+    from backend.domains.recommend.service import rank_candidates
+    from backend.shared.json_safe import as_obj
+    from backend.domains.recommend.preference_match import compatibility as _compat
+
+    blocked = (
+        Block.query.filter_by(blocker_id=account_id, blocked_id=target_id).first() or
+        Block.query.filter_by(blocker_id=target_id, blocked_id=account_id).first()
+    )
+    if blocked:
+        return None
+
+    row = db.session.query(Account, DatingProfile).join(
+        DatingProfile, DatingProfile.account_id == Account.id
+    ).filter(
+        Account.id == target_id,
+        Account.account_status == 'active',
+        Account.deleted_at.is_(None),
+        DatingProfile.discoverability == 'discoverable',
+    ).first()
+    if not row:
+        return None
+    acc, dating = row
+
+    actor_dating = DatingProfile.query.filter_by(account_id=account_id).first()
+
+    ranked = rank_candidates(account_id, [target_id], mode='dating')
+    score = dict(ranked).get(target_id, 0.0)
+    pref_boost = _learned_preference_boost(account_id, [target_id])
+    if pref_boost:
+        score = max(0.0, min(1.0, score + pref_boost.get(target_id, 0.0)))
+
+    card = {k: v for k, v in acc.to_dict().items() if k not in _CARD_STRIP}
+    card['is_verified'] = bool((acc.kyc_level or 0) >= 2)
+    # include_sensitive=False — same privacy rule as get_deck(): religion/
+    # religiosity/tribe_ethnicity/politics only surface if the profile
+    # owner opted each one in via sensitive_optin.
+    dp_dict = dating.to_dict(include_sensitive=False)
+    card['dating_profile'] = dp_dict
+
+    if actor_dating:
+        _my_prefs = as_obj(actor_dating.preferences)
+        _c = _compat(actor_dating, _my_prefs, dating, as_obj(dating.preferences))
+        card['mutual_pct'] = _c['mutual_pct']
+        card['preference_dealbreaker'] = _c['dealbreaker']
+
+    photos = dp_dict.get('photos') or []
+    if not photos and card.get('avatar'):
+        photos = [{'url': card['avatar']}]
+    card['photos'] = photos
+
+    card['compatibility_score'] = round(score, 3)
+    card['compatibility_pct'] = min(99, max(1, round(score * 100)))
+
+    from backend.domains.interest.models import InterestProfile, InterestTag
+    my_interest_ids = {
+        ip.tag_id for ip in
+        InterestProfile.query.filter_by(account_id=account_id).all()
+    }
+    target_tags = db.session.query(InterestProfile, InterestTag).join(
+        InterestTag, InterestTag.id == InterestProfile.tag_id
+    ).filter(InterestProfile.account_id == target_id).all()
+    # is_shared per tag (not just the count) — the profile-detail screen
+    # visually distinguishes "you both like this" interests from the rest.
+    interest_tags = [
+        {'id': t.id, 'display_name_en': t.display_name_en, 'is_shared': t.id in my_interest_ids}
+        for _, t in target_tags
+    ]
+    shared = len(my_interest_ids & {t['id'] for t in interest_tags})
+    card['shared_interest_count'] = shared
+    card['interest_tags'] = interest_tags
+
+    def _spark_why(pct, shared_n, dp):
+        bits = []
+        if shared_n >= 3:
+            bits.append(f'{shared_n} shared interests')
+        elif shared_n > 0:
+            bits.append(f'{shared_n} shared interest{"s" if shared_n > 1 else ""}')
+        if dp and dp.get('relationship_goal'):
+            bits.append(f'both open to {dp["relationship_goal"].replace("_", " ")}')
+        lead = 'Strong match' if pct >= 75 else ('Good match' if pct >= 50 else 'Worth a look')
+        return f'{lead} · ' + ' · '.join(bits) if bits else lead
+
+    card['why'] = _spark_why(card['compatibility_pct'], shared, dp_dict)
+
+    from backend.shared.events.models import BehavioralEvent
+    card['has_viewed'] = db.session.query(BehavioralEvent.id).filter(
+        BehavioralEvent.account_id == account_id,
+        BehavioralEvent.verb == 'profile.view',
+        BehavioralEvent.object_id == target_id,
+    ).first() is not None
+
+    return card
+
+
+def get_match_with(account_id: str, target_id: str) -> dict:
+    """Is account_id currently matched with target_id? Backs the profile-
+    detail screen's context-aware action bar — matched shows 'Open Chat'
+    straight into the existing thread, unmatched shows the swipe actions."""
+    match = Match.query.filter(
+        Match.state == 'active',
+        or_(
+            (Match.account_a_id == account_id) & (Match.account_b_id == target_id),
+            (Match.account_a_id == target_id) & (Match.account_b_id == account_id),
+        ),
+    ).first()
+    if not match:
+        return {'matched': False}
+    return {'matched': True, 'match_id': match.id, 'thread_id': match.thread_id}
 
 
 def search_people(account_id: str, direction: str = 'outgoing',
@@ -480,14 +768,14 @@ def search_people(account_id: str, direction: str = 'outgoing',
     interest_map: dict = {}
     if page_ids:
         try:
-            from backend.domains.interest.models import AccountInterest, Interest
-            rows = db.session.query(AccountInterest, Interest).join(
-                Interest, Interest.id == AccountInterest.interest_id
-            ).filter(AccountInterest.account_id.in_(page_ids)).all()
-            for ai, interest in rows:
-                interest_map.setdefault(ai.account_id, []).append({
-                    'id': interest.id,
-                    'display_name_en': interest.display_name_en,
+            from backend.domains.interest.models import InterestProfile, InterestTag
+            rows = db.session.query(InterestProfile, InterestTag).join(
+                InterestTag, InterestTag.id == InterestProfile.tag_id
+            ).filter(InterestProfile.account_id.in_(page_ids)).all()
+            for ip, tag in rows:
+                interest_map.setdefault(ip.account_id, []).append({
+                    'id': tag.id,
+                    'display_name_en': tag.display_name_en,
                 })
         except Exception:
             pass
@@ -496,7 +784,8 @@ def search_people(account_id: str, direction: str = 'outgoing',
     for e in page_rows:
         acc, dp = e['acc'], e['dp']
         card = {k: v for k, v in acc.to_dict().items() if k not in _CARD_STRIP}
-        dp_dict = dp.to_dict()
+        card['is_verified'] = bool((acc.kyc_level or 0) >= 2)
+        dp_dict = dp.to_dict(include_sensitive=False)  # never the owner viewing here
         card['dating_profile'] = dp_dict
         photos = (dp_dict.get('photos') or [])
         if not photos and card.get('avatar'):
@@ -517,6 +806,66 @@ def search_people(account_id: str, direction: str = 'outgoing',
         'total': total,
         'last_page': max(1, math.ceil(total / per_page)) if total else 1,
     }
+
+
+def get_trending_cards(account_id: str, app_id: str, limit: int = 10) -> list[dict]:
+    """Coarse "trending near you" cards for the Sparks browse UI. Real scores
+    live in analytics.service.get_trending_account_ids() (admin/internal
+    only) — this function deliberately never returns a score or rank, only
+    a randomly-sampled subset of the trending pool, same anti-gaming
+    principle as get_deck()'s band-jitter: nobody should be able to infer
+    "I'm #4 trending" from repeated calls."""
+    from backend.domains.analytics.service import get_trending_account_ids, sample_trending
+    from backend.domains.safety.models import Block, Report
+    from sqlalchemy import func as _func
+
+    actor_dating = DatingProfile.query.filter_by(account_id=account_id).first()
+    actor_gender = actor_dating.gender if actor_dating else None
+    opp = _opposite_gender(actor_gender)
+    eff_genders = set(opp) if opp else None
+
+    blocked_ids = (
+        {b.blocked_id for b in Block.query.filter_by(blocker_id=account_id).all()} |
+        {b.blocker_id for b in Block.query.filter_by(blocked_id=account_id).all()}
+    )
+    reported = (
+        db.session.query(Report.target_account_id)
+        .group_by(Report.target_account_id)
+        .having(_func.count(Report.id) >= 3).all()
+    )
+    excluded = blocked_ids | {r[0] for r in reported} | {account_id}
+
+    ranked = get_trending_account_ids(app_id, limit=40)
+    pool_ids = [aid for aid, _score in ranked if aid not in excluded]
+    if not pool_ids:
+        return []
+
+    rows = db.session.query(Account, DatingProfile).join(
+        DatingProfile, DatingProfile.account_id == Account.id
+    ).filter(
+        Account.id.in_(pool_ids),
+        Account.account_status == 'active',
+        Account.deleted_at.is_(None),
+        DatingProfile.discoverability == 'discoverable',
+    )
+    if eff_genders:
+        rows = rows.filter(_func.lower(DatingProfile.gender).in_(eff_genders))
+    eligible = {acc.id: (acc, dp) for acc, dp in rows.all() if acc.modes.get('sparks', False)}
+
+    sampled_ids = sample_trending(list(eligible.keys()), k=limit)
+    cards = []
+    for aid in sampled_ids:
+        acc, dp = eligible[aid]
+        card = {k: v for k, v in acc.to_dict().items() if k not in _CARD_STRIP}
+        card['is_verified'] = bool((acc.kyc_level or 0) >= 2)
+        dp_dict = dp.to_dict(include_sensitive=False)  # never the owner viewing here
+        card['dating_profile'] = dp_dict
+        photos = (dp_dict.get('photos') or [])
+        if not photos and card.get('avatar'):
+            photos = [{'url': card['avatar']}]
+        card['photos'] = photos
+        cards.append(card)
+    return cards
 
 
 def record_action(actor_id: str, target_id: str, action: str) -> tuple[Spark, Match | None]:

@@ -1,6 +1,7 @@
 """
 Chat service: thread creation, message sending.
 """
+from __future__ import annotations
 import uuid
 from datetime import datetime
 from sqlalchemy import or_
@@ -83,3 +84,17 @@ def get_unread_count(thread_id: str, account_id: str) -> int:
     if last_read:
         query = query.filter(Message.created_at > last_read)
     return query.count()
+
+
+def has_unread_messages(account_id: str) -> bool:
+    """Does this account have any unread message anywhere, across every
+    thread? Reuses get_unread_count per thread (no separate query logic to
+    drift out of sync with it) but short-circuits on the first hit instead
+    of summing every thread the way GET /v1/threads does for its per-row
+    badges — cheaper when the caller only needs a yes/no (the mobile home
+    badge, and the daily local-notification content check)."""
+    thread_ids = [
+        r[0] for r in db.session.query(ThreadParticipant.thread_id)
+        .filter_by(account_id=account_id).all()
+    ]
+    return any(get_unread_count(tid, account_id) > 0 for tid in thread_ids)

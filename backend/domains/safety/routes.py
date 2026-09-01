@@ -41,6 +41,7 @@ def file_report(account):
 
 @safety_bp.route('/block', methods=['POST'])
 @lu_jwt_required
+@rate_limit(20, 60)
 def block_account(account):
     data = request.get_json(silent=True) or {}
     blocked_id = (data.get('blocked_id') or '').strip()
@@ -59,6 +60,7 @@ def block_account(account):
 
 @safety_bp.route('/block/<block_id>', methods=['DELETE'])
 @lu_jwt_required
+@rate_limit(20, 60)
 def unblock_account(account, block_id):
     block = Block.query.filter_by(id=block_id, blocker_id=account.id).first()
     if not block:
@@ -159,6 +161,7 @@ def list_date_checkins(account):
 
 @safety_bp.route('/date-checkins', methods=['POST'])
 @lu_jwt_required
+@rate_limit(20, 60)
 def create_date_checkin(account):
     """
     Schedule a date safety check-in.
@@ -254,6 +257,8 @@ def cancel_date_checkin(account, checkin_id):
 
 @safety_bp.route('/panic', methods=['POST'])
 @lu_jwt_required
+@rate_limit(5, 300)  # generous — a real emergency may need to retrigger, but this
+                     # also notifies every safety contact, so it isn't unlimited
 def panic_sos(account):
     """
     SOS panic alert — immediately notifies all safety contacts.
@@ -327,6 +332,20 @@ def panic_sos(account):
                 )
             except Exception:
                 pass
+
+    # Persist so admins can actually see SOS events — this used to only fire
+    # notifications and vanish with no queryable record.
+    try:
+        from backend.domains.safety.models import PanicAlert
+        db.session.add(PanicAlert(
+            account_id=account.id,
+            checkin_id=checkin_id or None,
+            location_text=location_text or None,
+            contacts_notified=len(contacts),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     return success_response(
         f'SOS alert sent to {len(contacts)} safety contact(s). Stay safe.',

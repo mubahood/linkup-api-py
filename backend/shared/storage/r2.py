@@ -18,6 +18,7 @@ Environment variables needed for production:
   R2_BUCKET_NAME      = linkup-media          (or override)
   R2_PUBLIC_BASE_URL  = https://media.linkup.app  (CDN / public bucket URL)
 """
+from __future__ import annotations
 import os
 import uuid
 import logging
@@ -28,6 +29,26 @@ logger = logging.getLogger(__name__)
 ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'ogg', 'aac', 'm4a', 'wav'}
 ALLOWED_FILE_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_AUDIO_EXTENSIONS | {'pdf', 'doc', 'docx'}
+
+
+def _content_matches_extension(data: bytes, ext: str) -> bool:
+    """Mirrors local.py's check — save_upload() previously trusted the
+    client-supplied filename extension alone."""
+    if ext in ALLOWED_IMAGE_EXTENSIONS:
+        try:
+            from PIL import Image
+            import io
+            Image.open(io.BytesIO(data)).verify()
+            return True
+        except Exception:
+            return False
+    if ext == 'pdf':
+        return data[:5] == b'%PDF-'
+    if ext == 'docx':
+        return data[:4] == b'PK\x03\x04'
+    if ext == 'doc':
+        return data[:8] == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
+    return True
 
 
 def _r2_client():
@@ -68,13 +89,17 @@ def save_upload(file, folder: str = 'general') -> str | None:
         logger.warning(f'[Storage] Rejected file extension: {ext}')
         return None
 
+    file_bytes = file.read()
+    if not _content_matches_extension(file_bytes, ext):
+        logger.warning(f'[Storage] File content did not match claimed extension: {ext}')
+        return None
+
     unique_name = f'{folder}/{uuid.uuid4().hex}.{ext}'
 
     client = _r2_client()
     if client:
         bucket = os.getenv('R2_BUCKET_NAME', 'linkup-media')
         try:
-            file_bytes = file.read()
             content_type = _content_type(ext)
             client.put_object(
                 Bucket=bucket,
@@ -96,6 +121,43 @@ def save_upload(file, folder: str = 'general') -> str | None:
         file.seek(0)
         from backend.shared.storage.local import save_upload as local_save
         return local_save(file, folder=folder)
+
+
+def save_bytes(data: bytes, ext: str, folder: str = 'general') -> str | None:
+    """Same as save_upload but for raw bytes with a known extension already
+    validated by the caller (see url_fetch.py) — used for the drag-an-image-
+    from-a-webpage flow, where there's no Werkzeug FileStorage object."""
+    ext = (ext or '').lower().lstrip('.')
+    if ext not in ALLOWED_FILE_EXTENSIONS:
+        logger.warning(f'[Storage] Rejected file extension: {ext}')
+        return None
+    if not _content_matches_extension(data, ext):
+        logger.warning(f'[Storage] File content did not match claimed extension: {ext}')
+        return None
+
+    unique_name = f'{folder}/{uuid.uuid4().hex}.{ext}'
+
+    client = _r2_client()
+    if client:
+        bucket = os.getenv('R2_BUCKET_NAME', 'linkup-media')
+        try:
+            client.put_object(
+                Bucket=bucket,
+                Key=unique_name,
+                Body=data,
+                ContentType=_content_type(ext),
+            )
+            base = os.getenv('R2_PUBLIC_BASE_URL', '').rstrip('/')
+            if base:
+                return f'{base}/{unique_name}'
+            account_id = os.getenv('R2_ACCOUNT_ID', '')
+            return f'https://{bucket}.{account_id}.r2.cloudflarestorage.com/{unique_name}'
+        except Exception as e:
+            logger.error(f'[R2] Upload failed: {e}')
+            return None
+    else:
+        from backend.shared.storage.local import save_bytes as local_save_bytes
+        return local_save_bytes(data, ext, folder=folder)
 
 
 def get_url(path: str | None) -> str | None:

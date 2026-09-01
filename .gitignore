@@ -19,3 +19,5 @@ negoride_db_dump.sql
 .server-credentials
 backend/uploads/gallery/*
 backend/uploads/photos/*
+backend/uploads/listing_claims/*
+!backend/uploads/listing_claims/.gitkeep

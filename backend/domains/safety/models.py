@@ -75,6 +75,42 @@ class SafetyContact(db.Model):
         }
 
 
+class PanicAlert(db.Model):
+    """Persistent log of every SOS/panic trigger — POST /v1/safety/panic used to fire
+    notifications and vanish with no queryable record. This is the admin-visible trail."""
+    __tablename__ = 'lu_panic_alerts'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    account_id = db.Column(db.String(36), db.ForeignKey('lu_accounts.id', ondelete='CASCADE'), nullable=False)
+    checkin_id = db.Column(db.String(36), nullable=True)
+    location_text = db.Column(db.String(500), nullable=True)
+    contacts_notified = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default='open')  # open | acknowledged | resolved
+    resolved_by = db.Column(db.String(36), nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolution_note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    account = db.relationship('Account', foreign_keys=[account_id], lazy='joined')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'account_id': self.account_id,
+            'account': {'id': self.account.id, 'display_name': self.account.display_name,
+                        'handle': self.account.handle, 'phone': self.account.phone,
+                        'avatar': self.account.avatar} if self.account else None,
+            'checkin_id': self.checkin_id,
+            'location_text': self.location_text,
+            'contacts_notified': self.contacts_notified,
+            'status': self.status,
+            'resolved_by': self.resolved_by,
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+            'resolution_note': self.resolution_note,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class DateCheckin(db.Model):
     """Scheduled date safety check-in. User tells the app 'I have a date at 8pm — check on me at 9pm'."""
     __tablename__ = 'lu_date_checkins'

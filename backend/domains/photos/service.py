@@ -1,6 +1,8 @@
 from backend.models import db
 from backend.domains.photos.models import UserPhoto
-from backend.shared.storage.r2 import save_upload
+from backend.shared.storage.r2 import save_bytes
+from backend.shared.storage.url_fetch import fetch_image_from_url, ImageFetchError
+from backend.shared.storage.image_compress import compress_image
 from backend.shared.utils.response import success_response, error_response
 
 
@@ -10,13 +12,37 @@ class PhotoService:
 
     @staticmethod
     def upload(account, flask_request):
+        """Accepts either a `photo` file (normal upload) or a `photo_url`
+        field (drag-an-image-from-another-website — the browser only gives
+        us the image's URL when the drag source isn't a local file, so the
+        server fetches it; see url_fetch.py for why that's not just a plain
+        `requests.get`). Either way the raw bytes converge on the same path
+        from here: compressed (see image_compress.py — this also doubles as
+        the real "is this actually an image" check, replacing a bare
+        filename-extension guess) and saved uniformly."""
         file = flask_request.files.get('photo')
-        if not file:
-            return error_response('No photo file provided.')
+        photo_url = (flask_request.form.get('photo_url') or '').strip()
 
-        url = save_upload(file, folder='gallery')
-        if not url:
+        if file:
+            raw = file.read()
+            if not raw:
+                return error_response('Empty file.')
+        elif photo_url:
+            try:
+                raw, _ = fetch_image_from_url(photo_url)
+            except ImageFetchError as e:
+                return error_response(str(e))
+        else:
+            return error_response('No photo file or photo_url provided.')
+
+        try:
+            compressed, ext = compress_image(raw)
+        except ValueError:
             return error_response('Upload failed. Use JPG, PNG, or WebP images.')
+
+        url = save_bytes(compressed, ext, folder='gallery')
+        if not url:
+            return error_response('Could not save that image.')
 
         form = flask_request.form
         is_profile = form.get('is_profile_photo', 'false').lower() == 'true'
@@ -25,6 +51,21 @@ class PhotoService:
         caption    = (form.get('caption') or '').strip()[:300] or None
 
         account_id = str(account.id)
+
+        # If this account has no photo anywhere yet — no avatar, no other
+        # UserPhoto row, no dating-wizard photo either — this upload becomes
+        # the profile photo regardless of what the caller sent. Otherwise a
+        # client that forgets to set is_profile_photo=true on someone's very
+        # first upload leaves them with real photos but a blank avatar
+        # (T-API: admin-upload avatar-resolution gap).
+        if not is_profile and not account.avatar:
+            has_other_photo = UserPhoto.query.filter_by(account_id=account_id).first() is not None
+            if not has_other_photo:
+                from backend.domains.profile.models import DatingProfile
+                dp = DatingProfile.query.filter_by(account_id=account_id).first()
+                has_other_photo = bool(dp and dp.photos)
+            if not has_other_photo:
+                is_profile = True
 
         # Un-set previous profile / cover so there is always at most one
         if is_profile:
@@ -39,6 +80,12 @@ class PhotoService:
             ).update({'is_cover_photo': False}, synchronize_session=False)
             account.cover_photo = url
 
+        # Next slot in this account's gallery order — previously left at the
+        # column default (0) for every upload, which made "gallery order"
+        # silently degenerate to reverse-upload-order wherever sort_order
+        # was the tiebreaker (see list_photos/list_gallery below).
+        next_sort_order = UserPhoto.query.filter_by(account_id=account_id).count()
+
         photo = UserPhoto(
             account_id=account_id,
             url=url,
@@ -46,6 +93,7 @@ class PhotoService:
             is_cover_photo=is_cover,
             is_public=is_public,
             caption=caption,
+            sort_order=next_sort_order,
         )
         db.session.add(photo)
         db.session.commit()
@@ -107,11 +155,17 @@ class PhotoService:
                 'created_at': created_at,
             })
 
-        # 1) Dedicated gallery uploads
+        # 1) Dedicated gallery uploads — same ordering convention as
+        # list_photos (profile photo first, then declared gallery order)
+        # rather than pure recency, so the account's actual "photo #1"
+        # leads this source's slice of the aggregated grid too.
         pq = UserPhoto.query.filter_by(account_id=account_id)
         if not own:
             pq = pq.filter_by(is_public=True)
-        for p in pq.order_by(UserPhoto.created_at.desc()).all():
+        for p in pq.order_by(
+            UserPhoto.is_profile_photo.desc(), UserPhoto.is_cover_photo.desc(),
+            UserPhoto.sort_order.asc(), UserPhoto.created_at.desc(),
+        ).all():
             add(p.url, caption=p.caption, source='gallery',
                 created_at=p.created_at.isoformat() if p.created_at else None)
 
@@ -222,10 +276,12 @@ class PhotoService:
         db.session.delete(photo)
         db.session.flush()
 
-        # Auto-promote the most-recent remaining photo as profile/cover
+        # Auto-promote whichever remaining photo is earliest in gallery
+        # order (not "most recently uploaded" — the point of sort_order is
+        # that upload recency and gallery position aren't the same thing).
         if was_profile:
             nxt = UserPhoto.query.filter_by(account_id=account_id)\
-                .order_by(UserPhoto.created_at.desc()).first()
+                .order_by(UserPhoto.sort_order.asc(), UserPhoto.created_at.asc()).first()
             if nxt:
                 nxt.is_profile_photo = True
                 account.avatar = nxt.url
@@ -234,7 +290,7 @@ class PhotoService:
 
         if was_cover:
             nxt = UserPhoto.query.filter_by(account_id=account_id)\
-                .order_by(UserPhoto.created_at.desc()).first()
+                .order_by(UserPhoto.sort_order.asc(), UserPhoto.created_at.asc()).first()
             if nxt and not nxt.is_cover_photo:
                 nxt.is_cover_photo = True
                 account.cover_photo = nxt.url

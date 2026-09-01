@@ -56,9 +56,9 @@ export default function Login() {
         {/* Header */}
         <div className="lu-login-header">
           <div className="lu-login-brand">
-            <div className="lu-logo-mark">LU</div>
+            <img src="/logo.svg" alt="" className="lu-logo-mark" style={{ objectFit: 'contain' }} />
             <div>
-              <h1 className="lu-login-title">LinkUp</h1>
+              <h1 className="lu-login-title">LinkUp Platform</h1>
               <p className="lu-login-subtitle">Admin Console</p>
             </div>
           </div>
@@ -149,7 +149,7 @@ export default function Login() {
 
         {/* Footer */}
         <div className="lu-login-footer">
-          <span>LinkUp Admin</span>
+          <span>LinkUp Platform</span>
           <span className="lu-dot" />
           <span>Authorized access only</span>
         </div>

@@ -30,6 +30,22 @@ def _coerce_date(v):
         return None
 
 
+def _is_blocked_pair(account_id: str, other_id: str) -> bool:
+    """True if either account has blocked the other, in either direction —
+    profile viewing (by handle, by id, or a member's public posts) never
+    checked this, so a blocked user could still fully browse the profile
+    they were blocked from (mirrors the same check already used in sparks,
+    search, and chat)."""
+    from backend.domains.safety.models import Block
+    from sqlalchemy import or_ as _or
+    return db.session.query(Block.id).filter(
+        _or(
+            (Block.blocker_id == account_id) & (Block.blocked_id == other_id),
+            (Block.blocker_id == other_id) & (Block.blocked_id == account_id),
+        )
+    ).first() is not None
+
+
 def _get_full_profile(account_id: str, viewer_id: str = None) -> dict:
     """Build a full professional profile payload with completion score and stats."""
     from backend.domains.interest.models import InterestProfile, InterestTag
@@ -64,15 +80,17 @@ def _get_full_profile(account_id: str, viewer_id: str = None) -> dict:
         _dating = DatingProfile.query.filter_by(account_id=account_id).first()
     completion = calculate_completion(account, prof, edu, exp, _ic, dating_profile=_dating)
 
-    # Build profile dict with completion + resolved location
+    # Build profile dict with completion + resolved location. completion_score
+    # must be set unconditionally — a dating-only account with no
+    # ProfessionalProfile row still needs its (dating) score to reach the
+    # client, otherwise `prof_dict` is `{}` and the score silently vanishes.
     prof_dict = prof.to_dict() if prof else {}
-    if prof_dict:
-        prof_dict['completion_score'] = completion['score']
-        if prof and prof.location_id:
-            from backend.domains.reference.models import Location
-            loc = db.session.get(Location, prof.location_id)
-            if loc:
-                prof_dict['location'] = loc.to_dict()
+    prof_dict['completion_score'] = completion['score']
+    if prof and prof.location_id:
+        from backend.domains.reference.models import Location
+        loc = db.session.get(Location, prof.location_id)
+        if loc:
+            prof_dict['location'] = loc.to_dict()
 
     # ── Real stats ──────────────────────────────────────────────────────────────
     connection_count = Link.query.filter(
@@ -95,8 +113,14 @@ def _get_full_profile(account_id: str, viewer_id: str = None) -> dict:
         'hubs':          hub_posts_count,
     }
 
+    account_dict = account.to_dict(include_private=(viewer_id == account_id))
+    # A boolean, not the raw kyc_level (withheld from non-owner views above)
+    # — lets the "verified" badge work on someone else's profile without
+    # leaking their exact numeric KYC level.
+    account_dict['is_verified'] = bool((account.kyc_level or 0) >= 2)
+
     return {
-        'account':              account.to_dict(),
+        'account':              account_dict,
         'profile':              prof_dict,
         'professional_profile': prof_dict,
         'education':            [e.to_dict() for e in edu],
@@ -105,6 +129,11 @@ def _get_full_profile(account_id: str, viewer_id: str = None) -> dict:
         'interests':            interests,
         'completion':           completion,
         'stats':                stats,
+        # Dating gallery — owner's view only (mode separation, same as
+        # `_dating` above). The dating wizard uploads here, not to
+        # account.avatar, so this is the real "main photo" source for a
+        # dating-only account with no professional avatar set.
+        'dating_photos':        (_dating.photos or []) if _dating else [],
     }
 
 
@@ -151,7 +180,7 @@ def update_my_profile(account):
             return error_response("years_experience must be a number.")
 
     db.session.commit()
-    return success_response('Profile updated.', _get_full_profile(account.id))
+    return success_response('Profile updated.', _get_full_profile(account.id, viewer_id=account.id))
 
 
 @profile_bp.route('/me/photo', methods=['POST'])
@@ -186,6 +215,8 @@ def get_profile_by_handle(account, handle):
         Account.deleted_at.is_(None)
     ).first()
     if not target:
+        return error_response('Profile not found.', status_code=404)
+    if target.id != account.id and _is_blocked_pair(account.id, target.id):
         return error_response('Profile not found.', status_code=404)
     prof = ProfessionalProfile.query.filter_by(account_id=target.id).first()
     if prof and prof.visibility_mode == 'self_only' and target.id != account.id:
@@ -405,6 +436,8 @@ def member_posts(account, handle):
     ).first()
     if not target:
         return error_response('Profile not found.', status_code=404)
+    if target.id != account.id and _is_blocked_pair(account.id, target.id):
+        return error_response('Profile not found.', status_code=404)
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -517,6 +550,8 @@ def get_profile_by_id(account, account_id):
 
     target = db.session.get(Account, account_id)
     if not target or target.deleted_at:
+        return error_response('Profile not found.', status_code=404)
+    if target.id != account.id and _is_blocked_pair(account.id, target.id):
         return error_response('Profile not found.', status_code=404)
 
     prof = ProfessionalProfile.query.filter_by(account_id=target.id).first()

@@ -7,6 +7,7 @@ from flask import Blueprint, request
 from backend.models import db
 from backend.domains.chat.models import Thread, ThreadParticipant, Message, MessageReaction
 from backend.domains.chat.service import get_or_create_direct_thread, send_message, get_unread_count
+from backend.domains.subscriptions import service as sub_service
 from backend.shared.auth.decorators import lu_jwt_required
 from backend.shared.idempotency import idempotent
 from backend.shared.ratelimit import rate_limit
@@ -88,6 +89,17 @@ def list_threads(account):
     return paginated_response(result, total, page, per_page, 'Threads loaded.')
 
 
+@chat_v1_bp.route('/unread', methods=['GET'])
+@lu_jwt_required
+def unread(account):
+    """Do I have any unread message anywhere? A single yes/no, cheaper than
+    fetching every thread just to check — backs the home-screen badge
+    (previously computed client-side by fetching all threads) and the daily
+    local-notification content check."""
+    from backend.domains.chat.service import has_unread_messages
+    return success_response('Unread status loaded.', {'has_unread': has_unread_messages(account.id)})
+
+
 @chat_v1_bp.route('', methods=['POST'])
 @lu_jwt_required
 def create_thread(account):
@@ -99,6 +111,17 @@ def create_thread(account):
         return error_response('participant_id is required.')
     if participant_id == account.id:
         return error_response('You cannot start a thread with yourself.')
+
+    from backend.domains.safety.models import Block
+    from sqlalchemy import or_ as _or
+    is_blocked = db.session.query(Block.id).filter(
+        _or(
+            (Block.blocker_id == account.id) & (Block.blocked_id == participant_id),
+            (Block.blocker_id == participant_id) & (Block.blocked_id == account.id),
+        )
+    ).first()
+    if is_blocked:
+        return error_response('Account not found.', status_code=404)
 
     thread = get_or_create_direct_thread(account.id, participant_id, mode)
     participants = ThreadParticipant.query.filter_by(thread_id=thread.id).all()
@@ -170,18 +193,54 @@ def post_message(account, thread_id):
     participant = ThreadParticipant.query.filter_by(thread_id=thread_id, account_id=account.id).first()
     if not participant:
         return error_response('Thread not found.', status_code=404)
+
+    # A block can happen after a thread already exists — re-check on every
+    # send rather than only at thread-creation time, so blocking someone
+    # actually silences a thread instead of just stopping new ones.
+    other_ids = [
+        r[0] for r in db.session.query(ThreadParticipant.account_id)
+        .filter(ThreadParticipant.thread_id == thread_id, ThreadParticipant.account_id != account.id)
+        .all()
+    ]
+    if other_ids:
+        from backend.domains.safety.models import Block
+        from sqlalchemy import or_ as _or
+        is_blocked = db.session.query(Block.id).filter(
+            _or(
+                (Block.blocker_id == account.id) & (Block.blocked_id.in_(other_ids)),
+                (Block.blocker_id.in_(other_ids)) & (Block.blocked_id == account.id),
+            )
+        ).first()
+        if is_blocked:
+            return error_response('You can no longer send messages in this conversation.', status_code=403)
+
     data = request.get_json(silent=True) or {}
     body = (data.get('body') or '').strip()
     media = data.get('media')  # list of {url, type} or None
     msg_type = data.get('type', 'text')
     if not body and not media:
         return error_response('Message body or media is required.')
+
+    today_start = sub_service.today_start()
+    quota = sub_service.check_and_consume(
+        account, 'chats_per_day',
+        lambda: Message.query.filter(
+            Message.sender_id == account.id, Message.created_at >= today_start,
+        ).count())
+    if not quota['allowed']:
+        return error_response(
+            'Daily message limit reached. Upgrade to keep chatting.', status_code=402,
+            data={'used': quota['used'], 'limit': quota['limit'], 'upsell': True,
+                  'reset_at': quota.get('reset_at')})
+
     # Content moderation hook (T-API-072) — soft flag, does not block in dev.
     from backend.shared.moderation import screen_text
     mod = screen_text(body)
 
     msg = send_message(thread_id, account.id, body, msg_type, media=media)
     msg_dict = msg.to_dict(viewer_id=account.id)
+    if quota.get('nudge'):
+        msg_dict['quota_nudge'] = quota['nudge']
     from backend.shared.events.emit import emit
     emit('message.send', account_id=account.id, object_type='thread', object_id=thread_id)
     if mod['flagged']:
@@ -197,12 +256,15 @@ def post_message(account, thread_id):
 
     # Notify all other participants
     try:
-        from backend.domains.notifications.service import create_notification
+        from backend.domains.notifications.service import create_notification, photo_for_account
         other_participants = ThreadParticipant.query.filter(
             ThreadParticipant.thread_id == thread_id,
             ThreadParticipant.account_id != account.id,
         ).all()
         preview = body[:80] + ('…' if len(body) > 80 else '')
+        # A thread already exists between these two, so the sender's photo
+        # is safe to show — same reasoning as the match notification.
+        sender_photo = photo_for_account(account.id)
         for p in other_participants:
             create_notification(
                 account_id=p.account_id,
@@ -211,6 +273,7 @@ def post_message(account, thread_id):
                 body=preview,
                 data={'thread_id': thread_id, 'sender_id': account.id},
                 action_url=f'/chat/{thread_id}',
+                image_url=sender_photo,
             )
     except Exception:
         pass

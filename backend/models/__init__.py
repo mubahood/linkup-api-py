@@ -25,7 +25,9 @@ from backend.domains.events.models import Event, EventRSVP
 from backend.domains.notifications.models import Notification
 from backend.domains.safety.models import Report, Block
 from backend.domains.wallet.models import WalletAccount, WalletTransaction, PasswordReset
+from backend.domains.subscriptions.models import SubscriptionPlan, Subscription
 from backend.domains.jobs.referral_models import JobReferral
 from backend.domains.posts.models import Post, PostLike, PostComment, PostCommentLike, PostSave, PollVote
+from backend.domains.listings.models import SourceListing, SourceCrawl, ListingClaim, ClaimVerificationEvent
 from backend.shared.idempotency import IdempotencyKey
 from backend.shared.events.models import BehavioralEvent

@@ -7,7 +7,11 @@ from flask import Blueprint, request
 from sqlalchemy import or_
 from backend.models import db
 from backend.domains.sparks.models import Spark, Match
-from backend.domains.sparks.service import get_deck, record_action, search_people
+from backend.domains.sparks.service import (
+    get_deck, record_action, search_people, get_trending_cards,
+    get_profile_card, get_match_with,
+)
+from backend.domains.subscriptions import service as sub_service
 from backend.shared.auth.decorators import sparks_mode_required, lu_jwt_required
 from backend.shared.idempotency import idempotent
 from backend.shared.ratelimit import rate_limit
@@ -15,6 +19,36 @@ from backend.shared.utils.response import success_response, error_response, pagi
 from backend.shared.utils.pagination import paginate_query
 
 sparks_bp = Blueprint('v1_sparks', __name__, url_prefix='/v1/sparks')
+
+# Single source of truth for the dating-photos cap — matches the mobile
+# wizard's own limit (lu_wizard.dart) and the admin console's photo-slot UI
+# (AccountFormModal.jsx's PHOTO_SLOTS), and is imported by admin/routes.py's
+# mirror of these two endpoints so all three never drift out of sync again.
+MAX_DATING_PHOTOS = 10
+
+# Free previews shown to an account before its dating profile is complete —
+# matches sparks_screen.dart's _maxFreeSwipes. That client-side counter
+# resets to 0 on every app restart (it's just a local `int`), so it was only
+# ever a UX nicety, not real enforcement — an incomplete profile could get
+# unlimited free previews by force-closing and reopening the app. This
+# constant backs the server-side check in action() below, which counts
+# lifetime Spark rows (never reset by a restart) and is the real gate.
+MAX_FREE_PREVIEW_SWIPES = 3
+
+
+def _profile_gate_incomplete(account) -> bool:
+    """Mirrors sparks_screen.dart's _loadProfilingStatus() definition of a
+    'complete enough to swipe freely' profile — kept in sync by hand since
+    there's no shared schema between the two. If this ever drifts, the
+    server becomes stricter than the client, not looser (fails closed)."""
+    from backend.domains.profile.models import DatingProfile
+    dp = DatingProfile.query.filter_by(account_id=account.id).first()
+    if not dp:
+        return True
+    about_done = bool((dp.bio or '').strip()) or (dp.gender is not None and dp.birth_year is not None)
+    prefs = dp.preferences if isinstance(dp.preferences, dict) else None
+    looking_done = dp.looking_for_gender is not None or dp.age_min is not None or bool(prefs)
+    return not (about_done and looking_done)
 
 
 def _norm_gender(v):
@@ -75,6 +109,72 @@ def deck(account):
     return success_response('Deck loaded.', cards)
 
 
+@sparks_bp.route('/trending', methods=['GET'])
+@sparks_mode_required
+def trending(account):
+    """Coarse "Trending near you" cards — never a score/rank, a randomized
+    sample of the current trending pool (see sparks/service.py:get_trending_cards
+    for why: raw popularity numbers on a dating profile invite gaming)."""
+    limit = min(request.args.get('limit', 10, type=int), 20)
+    cards = get_trending_cards(account.id, account.app_id, limit=limit)
+    return success_response('Trending loaded.', cards)
+
+
+@sparks_bp.route('/notification-candidate', methods=['GET'])
+@sparks_mode_required
+def notification_candidate(account):
+    """One discovery-deck candidate for the "browse from the notification
+    shade" feature — same ranking/safety-exclusion pipeline as /deck (reused
+    via get_deck's extra_excluded param), sliced to a single lightweight
+    card instead of a full swipe deck. ?exclude=id1,id2,... lets the client
+    skip whoever it's already shown this Next-cycling session. data: null
+    when nothing's left to show."""
+    from backend.domains.notifications.service import resolve_image_url
+
+    raw_exclude = (request.args.get('exclude') or '').strip()
+    exclude_ids = {v.strip() for v in raw_exclude.split(',') if v.strip()}
+
+    cards = get_deck(account.id, limit=1, extra_excluded=exclude_ids)
+    if not cards:
+        return success_response('No more candidates right now.', None)
+
+    card = cards[0]
+    dp = card.get('dating_profile') or {}
+    photos = card.get('photos') or []
+    photo_url = photos[0]['url'] if photos and photos[0].get('url') else None
+    return success_response('Candidate loaded.', {
+        'id': card['id'],
+        'display_name': card.get('display_name'),
+        'age': dp.get('age'),
+        'location_label': dp.get('location_label'),
+        'photo_url': resolve_image_url(photo_url),
+    })
+
+
+@sparks_bp.route('/profile-card/<account_id>', methods=['GET'])
+@sparks_mode_required
+def profile_card(account, account_id):
+    """Full single-target profile card for the dating profile-detail screen
+    — the same shape /deck cards use (dating_profile, photos, interest_tags,
+    compatibility_pct, why, mutual_pct), just for one already-known account
+    instead of a fresh ranked pool. Reached from a notification tap,
+    profile-viewers, search results, or the swipe deck's "View full
+    profile" button — all contexts that already have the target id."""
+    card = get_profile_card(account.id, account_id)
+    if not card:
+        return error_response('Profile not found.', status_code=404)
+    return success_response('Profile loaded.', card)
+
+
+@sparks_bp.route('/matches/with/<target_id>', methods=['GET'])
+@sparks_mode_required
+def match_with(account, target_id):
+    """Is the current account matched with target_id? Backs the profile-
+    detail screen's context-aware action bar: matched → 'Open Chat' into
+    the existing thread; not matched → the usual swipe actions."""
+    return success_response('Match status loaded.', get_match_with(account.id, target_id))
+
+
 @sparks_bp.route('/search', methods=['GET'])
 @sparks_mode_required
 def people_search(account):
@@ -109,6 +209,43 @@ def action(account):
     if target_id == account.id:
         return error_response('You cannot spark yourself.')
 
+    quota = None
+    if act in ('spark_up', 'pass', 'standout'):
+        if _profile_gate_incomplete(account):
+            # Lifetime count, not a daily one — this is a one-time onboarding
+            # nudge, not a quota, and must survive an app restart (see
+            # MAX_FREE_PREVIEW_SWIPES above).
+            free_used = Spark.query.filter(
+                Spark.actor_id == account.id,
+                Spark.action.in_(('spark_up', 'pass', 'standout')),
+            ).count()
+            if free_used >= MAX_FREE_PREVIEW_SWIPES:
+                return error_response(
+                    'Finish your profile to keep swiping.', status_code=403,
+                    data={'reason': 'profile_incomplete_gate'})
+
+        today_start = sub_service.today_start()
+        if act == 'standout':
+            quota = sub_service.check_and_consume(
+                account, 'standouts_per_day',
+                lambda: Spark.query.filter(
+                    Spark.actor_id == account.id, Spark.action == 'standout',
+                    Spark.created_at >= today_start,
+                ).count())
+        else:
+            quota = sub_service.check_and_consume(
+                account, 'swipes_per_day',
+                lambda: Spark.query.filter(
+                    Spark.actor_id == account.id,
+                    Spark.action.in_(('spark_up', 'pass')),
+                    Spark.created_at >= today_start,
+                ).count())
+        if not quota['allowed']:
+            return error_response(
+                'Daily limit reached. Upgrade to keep swiping.', status_code=402,
+                data={'used': quota['used'], 'limit': quota['limit'], 'upsell': True,
+                      'reset_at': quota.get('reset_at')})
+
     spark, match = record_action(account.id, target_id, act)
 
     # Behavioral signal (T-API-053)
@@ -116,28 +253,82 @@ def action(account):
     emit(f'spark.{act}', account_id=account.id, object_type='account', object_id=target_id,
          context={'is_match': bool(match)})
 
+    # First-match milestone: a one-shot bonus standout for whichever party
+    # this was their first-ever match (each side checked independently).
+    if match:
+        for party_id in (account.id, target_id):
+            party_match_count = Match.query.filter(
+                or_(Match.account_a_id == party_id, Match.account_b_id == party_id),
+            ).count()
+            if party_match_count == 1:
+                from backend.domains.identity.models import Account as _Account
+                party = db.session.get(_Account, party_id)
+                if party:
+                    sub_service.grant_first_match_bonus(party)
+
     # Notify on match
     if match:
         try:
-            from backend.domains.notifications.service import create_notification
+            from backend.domains.notifications.service import create_notification, photo_for_account
             from backend.domains.identity.models import Account
             actor_acct = Account.query.get(account.id)
             target_acct = Account.query.get(target_id)
             if actor_acct and target_acct:
-                for notif_target, other in [
-                    (account.id, target_acct.display_name),
-                    (target_id, actor_acct.display_name),
+                # A match is mutual — both parties already see each other on
+                # the deck, so showing the other person's actual photo here
+                # is safe (unlike an unmatched like/standout below, which
+                # stays deliberately anonymized).
+                for notif_target, other_name, other_id in [
+                    (account.id, target_acct.display_name, target_id),
+                    (target_id, actor_acct.display_name, account.id),
                 ]:
                     create_notification(
                         account_id=notif_target,
                         notif_type='spark.match',
-                        title=f"You matched with {other}! 🎉",
+                        title=f"You matched with {other_name}! 🎉",
                         body="Say hello — don't be shy.",
                         data={'match_id': match.id},
                         action_url=f'/sparks/matches/{match.id}',
+                        image_url=photo_for_account(other_id),
                     )
         except Exception:
             pass
+    # Notify on an unmatched like/standout — a teaser, no identity revealed, to
+    # drive the recipient back into the app to see who. Throttled to at most
+    # once per 3 hours per recipient so a popular profile isn't spammed with a
+    # push for every single incoming like.
+    elif act in ('spark_up', 'standout'):
+        try:
+            from datetime import datetime, timedelta
+            from backend.domains.notifications.models import Notification
+            from backend.domains.notifications.service import create_notification
+            recent_cutoff = datetime.utcnow() - timedelta(hours=3)
+            recent = Notification.query.filter(
+                Notification.account_id == target_id,
+                Notification.type == 'spark.like',
+                Notification.created_at > recent_cutoff,
+            ).first()
+            if not recent:
+                create_notification(
+                    account_id=target_id,
+                    notif_type='spark.like',
+                    title='Someone likes you 👀',
+                    body='Open Abanoonya Pro to see who.',
+                    action_url='/sparks/likes',
+                )
+        except Exception:
+            pass
+
+    quota_out = None
+    if quota:
+        # quota was checked before this action was recorded — reflect the
+        # post-action state to the client rather than the stale pre-action one.
+        remaining = quota['remaining'] if quota['remaining'] == -1 else max(0, quota['remaining'] - 1)
+        quota_out = {'remaining': remaining, 'limit': quota['limit']}
+        if quota.get('bonus'):
+            quota_out['bonus'] = quota['bonus']
+        if remaining <= 1 and remaining != -1:
+            quota_out['nudge'] = f'{remaining} left today — upgrade for unlimited.'
 
     return success_response(
         "It's a match! 🎉" if match else 'Action recorded.',
@@ -145,6 +336,7 @@ def action(account):
             'spark': spark.to_dict(),
             'match': match.to_dict(account.id) if match else None,
             'is_match': bool(match),
+            'quota': quota_out,
         }
     )
 
@@ -225,6 +417,130 @@ def match_detail(account, match_id):
     if not match:
         return error_response('Match not found.', status_code=404)
     return success_response('Match loaded.', match.to_dict(account.id))
+
+
+@sparks_bp.route('/matches/<match_id>/contact', methods=['GET'])
+@lu_jwt_required
+def match_contact(account, match_id):
+    """Reveal the matched member's phone/WhatsApp number. Requires an active
+    match the caller is actually a party to (never trust a client-supplied
+    target id), the can_reveal_contact entitlement, AND a free slot in
+    today's contacts_per_day quota — contact is only ever revealed between
+    two people who already mutually liked each other, and only as often as
+    their plan allows."""
+    match = Match.query.filter(
+        Match.id == match_id,
+        or_(Match.account_a_id == account.id, Match.account_b_id == account.id),
+        Match.state == 'active',
+    ).first()
+    if not match:
+        return error_response('Match not found.', status_code=404,
+                              data={'reason': 'not_matched'})
+    if not sub_service.can(account, 'can_reveal_contact'):
+        return error_response('Upgrade to reveal contact details.', status_code=403,
+                              data={'reason': 'upgrade_required'})
+
+    from backend.shared.events.models import BehavioralEvent
+    today_start = sub_service.today_start()
+    quota = sub_service.check_and_consume(
+        account, 'contacts_per_day',
+        lambda: BehavioralEvent.query.filter(
+            BehavioralEvent.account_id == account.id,
+            BehavioralEvent.verb == 'contact.reveal',
+            BehavioralEvent.created_at >= today_start,
+        ).count())
+    if not quota['allowed']:
+        return error_response(
+            "You've used today's contact reveals. Upgrade for more.", status_code=402,
+            data={'used': quota['used'], 'limit': quota['limit'], 'upsell': True,
+                  'reset_at': quota.get('reset_at')})
+
+    from backend.domains.identity.models import Account
+    other_id = match.account_b_id if match.account_a_id == account.id else match.account_a_id
+    other = db.session.get(Account, other_id)
+    if not other:
+        return error_response('Match not found.', status_code=404)
+
+    from backend.shared.events.emit import emit
+    emit('contact.reveal', account_id=account.id, object_type='account', object_id=other.id,
+         context={'match_id': match.id})
+
+    return success_response('Contact revealed.', {
+        'account_id': other.id,
+        'display_name': other.display_name,
+        'phone': other.phone,
+        'whatsapp': other.phone,
+    })
+
+
+@sparks_bp.route('/contact/<target_id>', methods=['GET'])
+@lu_jwt_required
+def browse_contact(account, target_id):
+    """Reveal a browsed (not-yet-matched) profile's phone/WhatsApp number.
+    Same gating as match_contact — the can_reveal_contact entitlement and a
+    free slot in today's shared contacts_per_day quota — just without the
+    active-match precondition, since this is called from the pre-match
+    profile detail sheet. Blocked/heavily-reported accounts are excluded
+    either direction, same as the deck and trending pool."""
+    if target_id == account.id:
+        return error_response('Invalid target.', status_code=400)
+
+    from backend.domains.identity.models import Account
+    from backend.domains.safety.models import Block, Report
+    from sqlalchemy import func as _func, or_ as _or
+
+    is_blocked = db.session.query(Block.id).filter(
+        _or(
+            (Block.blocker_id == account.id) & (Block.blocked_id == target_id),
+            (Block.blocker_id == target_id) & (Block.blocked_id == account.id),
+        )
+    ).first()
+    if is_blocked:
+        return error_response('Contact not found.', status_code=404)
+
+    report_count = db.session.query(_func.count(Report.id)).filter(
+        Report.target_account_id == target_id
+    ).scalar() or 0
+    if report_count >= 3:
+        return error_response('Contact not found.', status_code=404)
+
+    other = Account.query.filter(
+        Account.id == target_id,
+        Account.account_status == 'active',
+        Account.deleted_at.is_(None),
+    ).first()
+    if not other:
+        return error_response('Contact not found.', status_code=404)
+
+    if not sub_service.can(account, 'can_reveal_contact'):
+        return error_response('Upgrade to reveal contact details.', status_code=403,
+                              data={'reason': 'upgrade_required'})
+
+    from backend.shared.events.models import BehavioralEvent
+    today_start = sub_service.today_start()
+    quota = sub_service.check_and_consume(
+        account, 'contacts_per_day',
+        lambda: BehavioralEvent.query.filter(
+            BehavioralEvent.account_id == account.id,
+            BehavioralEvent.verb == 'contact.reveal',
+            BehavioralEvent.created_at >= today_start,
+        ).count())
+    if not quota['allowed']:
+        return error_response(
+            "You've used today's contact reveals. Upgrade for more.", status_code=402,
+            data={'used': quota['used'], 'limit': quota['limit'], 'upsell': True,
+                  'reset_at': quota.get('reset_at')})
+
+    from backend.shared.events.emit import emit
+    emit('contact.reveal', account_id=account.id, object_type='account', object_id=other.id,
+         context={'pre_match': True})
+
+    return success_response('Contact revealed.', {
+        'account_id': other.id,
+        'display_name': other.display_name,
+        'phone': other.phone,
+        'whatsapp': other.phone,
+    })
 
 
 # ─── Dating Profile ───────────────────────────────────────────────────────────
@@ -460,14 +776,21 @@ def incoming_likes(account):
 
     items, total, page, last_page, per_page = paginate_query(query, page, per_page)
 
+    unlocked = sub_service.can(account, 'can_view_likers')
     result = []
     for spark in items:
         d = spark.to_dict()
-        if spark.actor:
-            d['actor_account'] = spark.actor.to_dict()
+        if unlocked and spark.actor:
+            actor_dict = spark.actor.to_dict()
+            actor_dict['is_verified'] = bool((spark.actor.kyc_level or 0) >= 2)
+            d['actor_account'] = actor_dict
+        else:
+            d['locked'] = True
         result.append(d)
 
-    return paginated_response(result, total, page, per_page, f'{total} people liked you.')
+    msg = f'{total} people liked you.' if unlocked else \
+        f'{total} people liked you — upgrade to see who.'
+    return paginated_response(result, total, page, per_page, msg)
 
 
 # ─── Superlike daily count ────────────────────────────────────────────────────
@@ -483,11 +806,12 @@ def standout_count(account):
         Spark.action == 'standout',
         Spark.created_at >= today_start,
     ).count()
-    daily_limit = 5
+    daily_limit = sub_service.get_limits(account).get('standouts_per_day', 1)
+    remaining = -1 if daily_limit == -1 else max(0, daily_limit - used)
     return success_response('Standout count loaded.', {
         'used_today': used,
         'daily_limit': daily_limit,
-        'remaining': max(0, daily_limit - used),
+        'remaining': remaining,
     })
 
 
@@ -541,6 +865,43 @@ def dating_stats(account):
 
 # ─── Engagement analytics (T-API: who's-viewing signals) ──────────────────────
 
+@sparks_bp.route('/profile-viewers', methods=['GET'])
+@sparks_mode_required
+def profile_viewers(account):
+    """Who viewed my profile — reuses the profile.view events already recorded
+    by POST /analytics/event, no new tracking needed. Free users see the count
+    only; premium (can_view_profile_viewers) sees the full identified list."""
+    from backend.shared.events.models import BehavioralEvent
+    from backend.domains.identity.models import Account
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    query = BehavioralEvent.query.filter(
+        BehavioralEvent.verb == 'profile.view',
+        BehavioralEvent.object_id == account.id,
+        BehavioralEvent.account_id.isnot(None),
+        BehavioralEvent.account_id != account.id,
+    ).order_by(BehavioralEvent.created_at.desc())
+
+    items, total, page, last_page, per_page = paginate_query(query, page, per_page)
+
+    unlocked = sub_service.can(account, 'can_view_profile_viewers')
+    result = []
+    for ev in items:
+        d = {'viewed_at': ev.created_at.isoformat() if ev.created_at else None}
+        if unlocked:
+            viewer = db.session.get(Account, ev.account_id)
+            d['viewer'] = viewer.to_dict() if viewer else None
+        else:
+            d['locked'] = True
+        result.append(d)
+
+    msg = f'{total} people viewed your profile.' if unlocked else \
+        f'{total} people viewed your profile — upgrade to see who.'
+    return paginated_response(result, total, page, per_page, msg)
+
+
 @sparks_bp.route('/analytics/event', methods=['POST'])
 @lu_jwt_required
 def analytics_event(account):
@@ -558,6 +919,50 @@ def analytics_event(account):
     from backend.shared.events.emit import emit
     verb = 'profile.view' if event == 'profile_view' else 'photo.view'
     emit(verb, account_id=account.id, object_type='account', object_id=target_id)
+
+    # Real-time "someone viewed your profile" push — the one piece of this
+    # notification system that reaches a genuinely offline user with fresh
+    # data (a locally-scheduled reminder can only ever be as fresh as the
+    # user's last app-open, since there's no backend scheduler to refresh
+    # it). Same once-per-3h throttle as the spark_up/standout like-teaser
+    # above, so a popular profile doesn't get a push per viewer.
+    if verb == 'profile.view':
+        try:
+            from datetime import datetime, timedelta
+            from backend.domains.identity.models import Account
+            from backend.domains.notifications.models import Notification
+            from backend.domains.notifications.service import create_notification
+            recent_cutoff = datetime.utcnow() - timedelta(hours=3)
+            recent = Notification.query.filter(
+                Notification.account_id == target_id,
+                Notification.type == 'profile.view',
+                Notification.created_at > recent_cutoff,
+            ).first()
+            if not recent:
+                target = db.session.get(Account, target_id)
+                if target and sub_service.can(target, 'can_view_profile_viewers'):
+                    create_notification(
+                        account_id=target_id,
+                        notif_type='profile.view',
+                        title=f'{account.display_name} viewed your profile 👀',
+                        body='Say hi before they move on.',
+                        action_url='/sparks/profile-viewers',
+                    )
+                elif target:
+                    # Free tier: same soft tease the in-app locked-viewer list
+                    # already shows, just reaching people who aren't in the
+                    # app right now — not a new paywall pattern, the existing
+                    # one with a push in front of it.
+                    create_notification(
+                        account_id=target_id,
+                        notif_type='profile.view',
+                        title='Someone viewed your profile 👀',
+                        body='Upgrade to see who.',
+                        action_url='/sparks/profile-viewers',
+                    )
+        except Exception:
+            pass
+
     return success_response('Recorded.', {'recorded': True})
 
 
@@ -607,10 +1012,26 @@ def my_analytics(account):
 
 # ─── Dating profile photos ────────────────────────────────────────────────────
 
+def _sync_avatar_from_dating_photos(account, photos):
+    """Account.avatar is the single avatar shown everywhere outside the
+    dating swipe deck — posts, chat, presence, the profile viewer's header —
+    but these dating-photo routes only ever wrote to DatingProfile.photos.
+    An account that only ever added dating photos (the norm for a
+    dating-only app build, with no separate professional-avatar upload in
+    reach) ended up with no avatar anywhere else and showed as bare
+    initials everywhere. Mirror the first dating photo into Account.avatar,
+    but never clobber an avatar the user explicitly set via the separate
+    professional photo upload (distinguishable by its own storage folder)."""
+    current = account.avatar or ''
+    if current and '/dating_photos/' not in current:
+        return
+    account.avatar = photos[0]['url'] if photos else None
+
+
 @sparks_bp.route('/profile/photos', methods=['POST'])
 @lu_jwt_required
 def add_dating_photo(account):
-    """Append a photo URL to my dating profile photos list (max 6)."""
+    """Append a photo URL to my dating profile photos list (max MAX_DATING_PHOTOS)."""
     from backend.domains.profile.models import DatingProfile
     data = request.get_json(silent=True) or {}
     url = (data.get('url') or '').strip()
@@ -627,11 +1048,45 @@ def add_dating_photo(account):
         db.session.add(dp)
 
     photos = list(dp.photos or [])
-    if len(photos) >= 6:
-        return error_response('Maximum 6 photos allowed. Delete one first.')
+    if len(photos) >= MAX_DATING_PHOTOS:
+        return error_response(f'Maximum {MAX_DATING_PHOTOS} photos allowed. Delete one first.')
 
     photos.append({'url': url, 'caption': caption})
     dp.photos = photos
+    _sync_avatar_from_dating_photos(account, photos)
+    db.session.commit()
+    return success_response('Photo added.', {'photos': dp.photos})
+
+
+@sparks_bp.route('/profile/photos/upload', methods=['POST'])
+@lu_jwt_required
+def upload_dating_photo(account):
+    """Upload a photo file straight from the device onto my dating profile
+    photos list (max MAX_DATING_PHOTOS). Same storage path as the professional avatar/cover
+    upload, just appended to DatingProfile.photos instead of Account."""
+    from backend.domains.profile.models import DatingProfile
+    from backend.shared.storage.r2 import save_upload
+
+    file = request.files.get('photo')
+    if not file:
+        return error_response('No photo file provided.')
+
+    dp = DatingProfile.query.filter_by(account_id=account.id).first()
+    if not dp:
+        dp = DatingProfile(id=str(uuid.uuid4()), account_id=account.id)
+        db.session.add(dp)
+
+    photos = list(dp.photos or [])
+    if len(photos) >= MAX_DATING_PHOTOS:
+        return error_response(f'Maximum {MAX_DATING_PHOTOS} photos allowed. Delete one first.')
+
+    url = save_upload(file, folder='dating_photos')
+    if not url:
+        return error_response('Failed to upload photo. Please use JPG, PNG, or WebP.')
+
+    photos.append({'url': url, 'caption': None})
+    dp.photos = photos
+    _sync_avatar_from_dating_photos(account, photos)
     db.session.commit()
     return success_response('Photo added.', {'photos': dp.photos})
 
@@ -652,6 +1107,7 @@ def delete_dating_photo(account, photo_index):
 
     photos.pop(photo_index)
     dp.photos = photos
+    _sync_avatar_from_dating_photos(account, photos)
     db.session.commit()
     return success_response('Photo removed.', {'photos': dp.photos})
 
@@ -676,5 +1132,6 @@ def reorder_dating_photos(account):
         return error_response('Invalid order — must contain each index exactly once.')
 
     dp.photos = [photos[i] for i in order]
+    _sync_avatar_from_dating_photos(account, dp.photos)
     db.session.commit()
     return success_response('Photos reordered.', {'photos': dp.photos})

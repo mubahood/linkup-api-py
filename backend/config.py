@@ -1,15 +1,28 @@
 import os
+import secrets
 from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Random per-process fallback, not a fixed string — a missing env var in an
+# unconfigured environment now fails safe (a random, unguessable key that
+# invalidates on restart) instead of silently using the same hardcoded
+# secret every deployment of this codebase has ever shipped with.
+_FALLBACK_SECRET = secrets.token_hex(32)
+_FALLBACK_JWT_SECRET = secrets.token_hex(32)
+
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'linkup-default-secret-key-2026')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'linkup-default-jwt-key-2026')
-    # 30 years (≈946,080,000s) — effectively non-expiring sessions for now.
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 946080000)))
+    SECRET_KEY = os.getenv('SECRET_KEY', _FALLBACK_SECRET)
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', _FALLBACK_JWT_SECRET)
+    # 24h — a stolen/leaked access token self-expires quickly. The mobile
+    # client holds a separate 30-day refresh_token (backend/domains/identity)
+    # and silently exchanges it for a new access token on a 401, so this
+    # doesn't cost users a re-login. Existing tokens already issued under the
+    # old ~30-year expiry keep that expiry (it's baked into the token at
+    # issuance) — this only shortens tokens issued from now on.
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 86400)))
 
     # MySQL via MAMP socket (Unix) or TCP/IP (Windows/TCP)
     DB_USER = os.getenv('DB_USERNAME', 'root')
@@ -64,6 +77,12 @@ class Config:
     # OneSignal
     ONESIGNAL_APP_ID = os.getenv('ONESIGNAL_APP_ID', '56ef70cd-45a3-4a66-9838-3146fbbffe77')
     ONESIGNAL_REST_API_KEY = os.getenv('ONESIGNAL_REST_API_KEY', '')
+    # Optional — a named Android channel (color/importance/sound) created in
+    # the OneSignal dashboard (Settings -> Push & In-App -> Android ->
+    # Channels), referenced here by its UUID. Channels are dashboard-managed,
+    # not creatable via this REST API; unset falls back to OneSignal's
+    # default channel, which still delivers, just without the customization.
+    ONESIGNAL_ANDROID_CHANNEL_ID = os.getenv('ONESIGNAL_ANDROID_CHANNEL_ID', '')
 
     # App URL
     APP_URL = os.getenv('APP_URL', 'https://api.linkup.app')

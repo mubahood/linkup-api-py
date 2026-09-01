@@ -79,6 +79,8 @@ _DEFAULT_PREFS = {
     'link.accepted':             True,
     'spark.match':               True,
     'spark.unmatched':           True,
+    'spark.like':                True,
+    'profile.view':              True,
     'post.liked':                True,
     'post.commented':            True,
     'endorsement.received':      True,

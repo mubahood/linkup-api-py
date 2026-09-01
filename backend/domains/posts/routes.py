@@ -22,7 +22,9 @@ def _pagination():
 @posts_bp.route('/v1/posts', methods=['POST'])
 @lu_jwt_required
 def create_post(account):
-    post = PostService.create(account, request)
+    post, err = PostService.create(account, request)
+    if err:
+        return error_response(err)
     return success_response('Post created', post.to_dict(), status_code=201)
 
 
@@ -44,6 +46,16 @@ def get_trending(account):
     page, per_page = _pagination()
     posts, total = PostService.get_trending(account, mode, page, per_page)
     return paginated_response(posts, total, page, per_page)
+
+
+@posts_bp.route('/v1/posts/trending-authors', methods=['GET'])
+@lu_jwt_required
+def get_trending_authors(account):
+    """Story-circle row: who's trending right now, not what post."""
+    mode = request.args.get('mode', 'professional')
+    limit = min(30, max(1, int(request.args.get('limit', 15))))
+    authors = PostService.get_trending_authors(account, mode, limit)
+    return success_response('OK', authors)
 
 
 @posts_bp.route('/v1/posts/saved', methods=['GET'])
@@ -68,7 +80,7 @@ def get_by_account(account, account_id):
 @lu_jwt_required
 def get_post(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     enriched = PostService._enrich([post], account.id)
     return success_response('OK', enriched[0])
@@ -105,16 +117,23 @@ def delete_post(account, post_id):
 @lu_jwt_required
 def toggle_like(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     data = request.get_json(silent=True) or {}
     result = PostService.toggle_like(post, account.id, data.get('reaction_type', 'like'))
+    if result:  # None means the reaction was removed, not added — only track real likes
+        from backend.shared.events.emit import emit
+        emit('post.like', account_id=account.id, object_type='post', object_id=post.id,
+             context={'reaction_type': result})
     return success_response('OK', {'reaction': result, 'likes_count': post.likes_count})
 
 
 @posts_bp.route('/v1/posts/<post_id>/likes', methods=['GET'])
 @lu_jwt_required
 def get_likers(account, post_id):
+    post = PostService.get_by_id(post_id)
+    if not post or not PostService.can_view(post, account.id):
+        return error_response('Post not found', status_code=404)
     page, per_page = _pagination()
     likes, total = PostService.get_likers(post_id, page, per_page)
     return paginated_response(likes, total, page, per_page)
@@ -126,7 +145,7 @@ def get_likers(account, post_id):
 @lu_jwt_required
 def toggle_save(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     saved = PostService.toggle_save(post, account.id)
     return success_response('OK', {'saved': saved})
@@ -138,7 +157,7 @@ def toggle_save(account, post_id):
 @lu_jwt_required
 def register_view(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     PostService.register_view(post)
     return success_response('OK')
@@ -150,7 +169,7 @@ def register_view(account, post_id):
 @lu_jwt_required
 def share_post(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     data = request.get_json(silent=True) or {}
     shared = PostService.share(post, account, body=data.get('body'))
@@ -162,6 +181,9 @@ def share_post(account, post_id):
 @posts_bp.route('/v1/posts/<post_id>/comments', methods=['GET'])
 @lu_jwt_required
 def get_comments(account, post_id):
+    post = PostService.get_by_id(post_id)
+    if not post or not PostService.can_view(post, account.id):
+        return error_response('Post not found', status_code=404)
     page, per_page = _pagination()
     comments, total = PostService.get_comments(post_id, account.id, page, per_page)
     return paginated_response(comments, total, page, per_page)
@@ -171,13 +193,16 @@ def get_comments(account, post_id):
 @lu_jwt_required
 def add_comment(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     data = request.get_json(silent=True) or {}
     body = (data.get('body', '') or '').strip()
     if not body:
         return error_response('Comment body is required')
     comment = PostService.add_comment(post, account.id, body, data.get('parent_id'))
+    from backend.shared.events.emit import emit
+    emit('post.comment', account_id=account.id, object_type='post', object_id=post.id,
+         context={'comment_id': comment.id})
     return success_response('Comment added', comment.to_dict(), status_code=201)
 
 
@@ -221,6 +246,9 @@ def toggle_comment_like(account, comment_id):
     ).first()
     if not comment:
         return error_response('Comment not found', status_code=404)
+    post = PostService.get_by_id(comment.post_id)
+    if not post or not PostService.can_view(post, account.id):
+        return error_response('Comment not found', status_code=404)
     liked = PostService.toggle_comment_like(comment, account.id)
     return success_response('OK', {'liked': liked, 'likes_count': comment.likes_count})
 
@@ -231,7 +259,7 @@ def toggle_comment_like(account, comment_id):
 @lu_jwt_required
 def vote_poll(account, post_id):
     post = PostService.get_by_id(post_id)
-    if not post:
+    if not post or not PostService.can_view(post, account.id):
         return error_response('Post not found', status_code=404)
     data = request.get_json(silent=True) or {}
     option_id = data.get('option_id', '').strip()

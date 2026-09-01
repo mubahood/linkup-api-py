@@ -114,8 +114,18 @@ def send_gift(account):
     net = round(cash_value - fee, 2)
     price = int(gift.price_coins)
 
-    # Debit sender coins under lock.
-    sw = _wallet(account.id, lock=True)
+    # Lock both wallets in a fixed order (lower account id first), not
+    # "sender then recipient" — sender/recipient flip between calls, so two
+    # users gifting each other at the same moment would otherwise each hold
+    # one lock and wait on the other's, deadlocking. A consistent id-based
+    # order makes that impossible for this pair of rows.
+    if account.id < recipient_id:
+        sw = _wallet(account.id, lock=True)
+        rw = _wallet(recipient_id, lock=True)
+    else:
+        rw = _wallet(recipient_id, lock=True)
+        sw = _wallet(account.id, lock=True)
+
     if int(sw.coins or 0) < price:
         db.session.rollback()
         return error_response('Not enough coins. Top up to send this gift.',
@@ -135,8 +145,7 @@ def send_gift(account):
             description=f'Sent {gift.name} {gift.icon or ""}'.strip(),
             extra={'coins': price, 'gift_code': gift.code, 'recipient_id': recipient_id})
 
-    # Credit recipient redeemable under lock.
-    rw = _wallet(recipient_id, lock=True)
+    # Recipient wallet is already locked above.
     rw.redeemable = float(rw.redeemable or 0) + net
     _ledger(rw, recipient_id, type_='credit', category='gift_received', amount=net,
             description=f'Received {gift.name} {gift.icon or ""}'.strip(),

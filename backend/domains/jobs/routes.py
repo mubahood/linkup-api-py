@@ -240,6 +240,8 @@ def get_job(account, job_id):
             db.session.commit()
         except Exception:
             db.session.rollback()
+        from backend.shared.events.emit import emit
+        emit('job.view', account_id=account.id, object_type='job', object_id=job.id)
     return success_response('Job loaded.', _enrich(job, account.id, include_count=True))
 
 

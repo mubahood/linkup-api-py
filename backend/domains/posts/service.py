@@ -20,8 +20,17 @@ class PostService:
 
     # ── Create ────────────────────────────────────────────────────────────────
 
+    MAX_TAGS = 10
+    MAX_TAG_LEN = 30
+    MAX_TITLE_LEN = 300  # matches the Post.title column width
+    MAX_BODY_LEN = 3000
+
     @staticmethod
     def create(account, req):
+        """Returns (post, error_message) — error_message is None on success.
+        Validation here exists to reject bad input cleanly (400s), not to
+        moderate content — there is deliberately no profanity/spam filter;
+        moderation_status stays 'approved' by default as it always has."""
         post_type  = req.form.get('post_type', 'text')
         body       = (req.form.get('body', '') or '').strip() or None
         title      = (req.form.get('title', '') or '').strip() or None
@@ -29,7 +38,24 @@ class PostService:
         mode       = req.form.get('mode', 'professional')
         hub_id     = req.form.get('hub_id') or None
         tags_raw   = req.form.get('tags', '') or ''
-        tags       = [t.strip().lstrip('#') for t in tags_raw.split(',') if t.strip()]
+
+        if body and len(body) > PostService.MAX_BODY_LEN:
+            return None, f'Post body must be under {PostService.MAX_BODY_LEN} characters.'
+        if title and len(title) > PostService.MAX_TITLE_LEN:
+            return None, f'Title must be under {PostService.MAX_TITLE_LEN} characters.'
+
+        seen_tags = set()
+        tags = []
+        for t in tags_raw.split(','):
+            t = t.strip().lstrip('#')
+            if not t or t.lower() in seen_tags:
+                continue
+            if len(t) > PostService.MAX_TAG_LEN:
+                return None, f'Tags must be under {PostService.MAX_TAG_LEN} characters each.'
+            seen_tags.add(t.lower())
+            tags.append(t)
+            if len(tags) >= PostService.MAX_TAGS:
+                break
 
         linked_post_id  = req.form.get('linked_post_id') or None
         linked_job_id   = req.form.get('linked_job_id') or None
@@ -39,10 +65,15 @@ class PostService:
         poll_question     = (req.form.get('poll_question', '') or '').strip() or None
         poll_options_raw  = req.form.getlist('poll_options')
         poll_options      = None
-        if poll_question and poll_options_raw:
+        if post_type == 'poll':
+            cleaned_opts = [opt.strip() for opt in poll_options_raw if opt.strip()]
+            if not poll_question:
+                return None, 'A poll needs a question.'
+            if not (2 <= len(cleaned_opts) <= 4):
+                return None, 'A poll needs between 2 and 4 options.'
             poll_options = [
-                {'id': str(uuid.uuid4())[:8], 'text': opt.strip(), 'vote_count': 0}
-                for opt in poll_options_raw if opt.strip()
+                {'id': str(uuid.uuid4())[:8], 'text': opt, 'vote_count': 0}
+                for opt in cleaned_opts
             ]
         poll_ends_at = None
         ends_str = req.form.get('poll_ends_at', '') or ''
@@ -50,7 +81,9 @@ class PostService:
             try:
                 poll_ends_at = datetime.fromisoformat(ends_str)
             except Exception:
-                pass
+                return None, 'poll_ends_at is not a valid date/time.'
+            if poll_ends_at <= datetime.utcnow():
+                return None, 'poll_ends_at must be in the future.'
 
         # Media uploads (up to 5 files)
         media = []
@@ -84,7 +117,7 @@ class PostService:
         db.session.add(post)
         db.session.commit()
         db.session.refresh(post)
-        return post
+        return post, None
 
     # ── Read helpers ──────────────────────────────────────────────────────────
 
@@ -110,6 +143,22 @@ class PostService:
     @staticmethod
     def _hub_ids(account_id):
         return {m.hub_id for m in HubMembership.query.filter_by(account_id=account_id).all()}
+
+    @staticmethod
+    def can_view(post, viewer_id):
+        """Per-post authorization by audience. get_feed() already filters by
+        audience for the feed listing, but every single-post-by-id route
+        (detail, comments, likes, poll vote, save, view, share) looked posts
+        up by id alone with no equivalent check — a private/connections-only
+        post was fully readable and interactable by anyone who had (or
+        guessed/enumerated) its id."""
+        if post.author_id == viewer_id:
+            return True
+        if post.audience == 'public':
+            return True
+        if post.audience == 'connections':
+            return viewer_id in PostService._connection_ids(post.author_id)
+        return False  # only_me, or any other value — default closed
 
     @staticmethod
     def _enrich(posts, account_id):
@@ -227,6 +276,68 @@ class PostService:
              .all()
         )
         return PostService._enrich(posts, account.id), total
+
+    @staticmethod
+    def get_trending_authors(account, mode, limit=15):
+        """Backs the Posts screen's story-circle row. For dating mode this
+        is "people you're looking for", not "who has engaging posts" — a
+        small user base means the old post-engagement version (72h window,
+        like/comment scoring) was empty almost all the time, which reads as
+        a broken feature rather than a quiet one. Sourced from the exact
+        same gender/age/preference-aware discovery pool as the Sparks swipe
+        deck (get_deck()) — deliberately reused as a black box rather than
+        re-deriving its filtering logic here, so this row and the swipe
+        deck can never disagree about who's a relevant match, and so a
+        change to matching logic never needs to be kept in sync in two
+        places. Professional mode keeps the original engagement-based
+        version, since there's no "looking for" concept there."""
+        if mode == 'dating':
+            from backend.domains.sparks.service import get_deck
+            cards = get_deck(account.id, limit=limit)
+            return [{
+                'account_id': c['id'],
+                'display_name': c.get('display_name'),
+                'avatar': c.get('avatar'),
+                'post_count': 0,
+            } for c in cards]
+
+        from datetime import timedelta
+        from sqlalchemy import func
+        from backend.domains.identity.models import Account
+
+        cutoff = datetime.utcnow() - timedelta(hours=72)
+        score = func.sum(Post.likes_count + Post.comments_count * 2)
+        q = db.session.query(
+            Post.author_id, score.label('score'), func.count(Post.id).label('post_count'),
+        ).filter(
+            Post.deleted_at.is_(None),
+            Post.moderation_status == 'approved',
+            Post.audience == 'public',
+            Post.created_at >= cutoff,
+            Post.author_id != account.id,
+            or_(Post.mode == mode, Post.mode == 'both'),
+        )
+
+        rows = q.group_by(Post.author_id).order_by(score.desc()).limit(limit).all()
+        if not rows:
+            return []
+
+        accounts = {
+            a.id: a for a in
+            Account.query.filter(Account.id.in_([r.author_id for r in rows])).all()
+        }
+        result = []
+        for r in rows:
+            acc = accounts.get(r.author_id)
+            if not acc:
+                continue
+            result.append({
+                'account_id': acc.id,
+                'display_name': acc.display_name,
+                'avatar': acc.avatar,
+                'post_count': int(r.post_count),
+            })
+        return result
 
     @staticmethod
     def get_by_account(viewer_id, account_id, page, per_page):

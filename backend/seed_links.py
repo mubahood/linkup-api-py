@@ -28,6 +28,7 @@ Graph statistics expected after seeding:
    - Avg degree ≈ 15–20 edges per account
    - Active-Now strip shows ≥8 contacts for samuel-ocen at all times
 """
+from __future__ import annotations
 import random
 import uuid
 import logging

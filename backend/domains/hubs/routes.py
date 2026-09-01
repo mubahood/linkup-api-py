@@ -18,6 +18,16 @@ def _enrich_hub(hub: Hub, account_id: str) -> dict:
     return hub.to_dict(membership)
 
 
+def _can_view_hub(hub: Hub, account_id: str) -> bool:
+    """Public hubs are open to everyone; private hubs require membership.
+    Every hub-content route below (posts list/detail, likes, comments) used
+    to check only "does the post exist" — a private hub's content was fully
+    readable (and likeable) by anyone who had or guessed its hub_id/post_id."""
+    if hub.is_public:
+        return True
+    return HubMembership.query.filter_by(hub_id=hub.id, account_id=account_id).first() is not None
+
+
 @hubs_bp.route('', methods=['GET'])
 @lu_jwt_required
 def list_hubs(account):
@@ -152,6 +162,10 @@ def join_hub(account, hub_id):
     db.session.add(membership)
     hub.member_count = (hub.member_count or 0) + 1
     db.session.commit()
+
+    from backend.shared.events.emit import emit
+    emit('hub.join', account_id=account.id, object_type='hub', object_id=hub.id)
+
     return success_response('Joined hub.', membership.to_dict())
 
 
@@ -255,6 +269,9 @@ def invite_to_hub(account, hub_id):
 @hubs_bp.route('/<hub_id>/posts', methods=['GET'])
 @lu_jwt_required
 def hub_posts(account, hub_id):
+    hub = db.session.get(Hub, hub_id)
+    if not hub or not _can_view_hub(hub, account.id):
+        return error_response('Hub not found.', status_code=404)
     page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
     query = HubPost.query.filter_by(hub_id=hub_id).filter(
@@ -292,6 +309,9 @@ def hub_posts(account, hub_id):
 @lu_jwt_required
 def get_post(account, hub_id, post_id):
     """Single post detail — includes like status, comment count, and first page of comments."""
+    hub = db.session.get(Hub, hub_id)
+    if not hub or not _can_view_hub(hub, account.id):
+        return error_response('Post not found.', status_code=404)
     post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
         HubPost.deleted_at.is_(None)
     ).first()
@@ -342,6 +362,9 @@ def create_post(account, hub_id):
 @lu_jwt_required
 def like_post(account, hub_id, post_id):
     """Toggle like on a hub post."""
+    hub = db.session.get(Hub, hub_id)
+    if not hub or not _can_view_hub(hub, account.id):
+        return error_response('Post not found.', status_code=404)
     post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
         HubPost.deleted_at.is_(None)
     ).first()
@@ -384,6 +407,9 @@ def like_post(account, hub_id, post_id):
 @lu_jwt_required
 def post_likes(account, hub_id, post_id):
     """List accounts who liked a post."""
+    hub = db.session.get(Hub, hub_id)
+    if not hub or not _can_view_hub(hub, account.id):
+        return error_response('Post not found.', status_code=404)
     post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).first()
     if not post:
         return error_response('Post not found.', status_code=404)
@@ -421,6 +447,9 @@ def edit_post(account, hub_id, post_id):
 @lu_jwt_required
 def list_comments(account, hub_id, post_id):
     """List comments on a hub post."""
+    hub = db.session.get(Hub, hub_id)
+    if not hub or not _can_view_hub(hub, account.id):
+        return error_response('Post not found.', status_code=404)
     post = HubPost.query.filter_by(id=post_id, hub_id=hub_id).filter(
         HubPost.deleted_at.is_(None)
     ).first()

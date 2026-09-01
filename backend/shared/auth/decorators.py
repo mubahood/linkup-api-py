@@ -80,6 +80,7 @@ def sparks_mode_required(fn):
         # Check modes_enabled (safe accessor — T-API-041)
         if not account.modes.get('sparks', False):
             return jsonify({'code': 0, 'message': 'Sparks mode is not enabled on your account'}), 403
+        _touch_last_seen(account)
         return fn(account, *args, **kwargs)
     return wrapper
 

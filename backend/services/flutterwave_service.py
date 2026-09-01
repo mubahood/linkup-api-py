@@ -33,14 +33,30 @@ class FlutterwaveService:
 
     BASE_URL = "https://api.flutterwave.com/v3"
 
+    #: Client-facing payment method → Flutterwave `payment_options` value.
+    #: Asking the member up front (mobile money vs card), then sending ONLY
+    #: that option, means Flutterwave's hosted page opens straight into the
+    #: right form instead of showing its own method-picker menu first — one
+    #: fewer screen for a "simple, seamless" checkout. Shared by every
+    #: purchase flow that hits this service (subscriptions, wallet top-up).
+    PAYMENT_METHODS = {
+        'mobilemoney': 'mobilemoneyuganda',
+        'card': 'card',
+    }
+
     def __init__(self):
         self._secret_key = os.getenv('FLW_SECRET_KEY', '')
         self._public_key = os.getenv('FLW_PUBLIC_KEY', '')
         self._secret_hash = os.getenv('FLW_SECRET_HASH', '')
-        self._currency = os.getenv('FLW_CURRENCY', 'NGN')
-        self._payment_options = os.getenv('FLW_PAYMENT_OPTIONS', 'card,banktransfer,ussd')
+        # This service only ever serves this one Uganda-based app — defaults
+        # match that market. 'mobilemoneyuganda' first so Flutterwave's
+        # hosted checkout page defaults to the payment method most Ugandan
+        # users actually have (MTN/Airtel Money), not a card form.
+        self._currency = os.getenv('FLW_CURRENCY', 'UGX')
+        self._payment_options = os.getenv(
+            'FLW_PAYMENT_OPTIONS', 'mobilemoneyuganda,card,banktransfer,ussd')
         self._timeout = int(os.getenv('FLW_TIMEOUT', 30))
-        self._app_url = os.getenv('APP_URL', 'https://api.linkup.app')
+        self._app_url = os.getenv('APP_URL', 'https://abanoonyapro.online')
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -139,13 +155,12 @@ class FlutterwaveService:
             'payment_options': payment_options or self._payment_options,
             'customer': {
                 'email': customer_email or f"customer_{tx_ref}@linkup.app",
-                'phonenumber': self._normalize_phone(customer_phone),
+                'phonenumber': self.normalize_phone_ug(customer_phone),
                 'name': customer_name or 'LinkUp Member',
             },
             'customizations': {
-                'title': 'LinkUp Uganda',
+                'title': 'Abanoonya Pro',
                 'description': description,
-                'logo': f"{self._app_url}/uploads/images/truckero.png",
             },
         }
         if meta:

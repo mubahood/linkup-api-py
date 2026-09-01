@@ -14,10 +14,10 @@ from flask_jwt_extended import create_access_token
 
 from backend.models import db
 from backend.domains.identity.models import Account, OtpRequest, RefreshToken
+from backend.shared.app_brand import resolve_app_id, DATING_ONLY_APP_IDS
 
 logger = logging.getLogger(__name__)
 
-DEV_OTP = '111111'
 OTP_EXPIRY_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
 
@@ -50,8 +50,8 @@ def create_otp(identifier: str, purpose: str = 'login') -> str:
         OtpRequest.verified_at.is_(None)
     ).delete()
 
-    code = DEV_OTP
-    logger.warning(f'[OTP] DEV MODE — {code} for {identifier} (purpose={purpose})')
+    # secrets.randbelow (not `random`) — this code gates real account access.
+    code = f'{secrets.randbelow(1_000_000):06d}'
 
     otp = OtpRequest(
         id=str(uuid.uuid4()),
@@ -95,13 +95,20 @@ def verify_otp(identifier: str, code: str, purpose: str = 'login') -> tuple[bool
 def create_account(phone: str, display_name: str) -> Account:
     """Create a new account with phone as the primary identifier."""
     handle = generate_handle(display_name, phone)
+    app_id = resolve_app_id()
     account = Account(
         id=str(uuid.uuid4()),
         handle=handle,
         display_name=display_name,
         phone=phone,
         phone_verified=1,
-        modes_enabled={"professional": True, "sparks": False},
+        app_id=app_id,
+        # Dating-only brands (Abanoonya Pro, Uganda Dating App) default
+        # straight into Sparks with Professional off, rather than the LinkUp
+        # default. Callers that pass their own modes_enabled explicitly (see
+        # identity/routes.py signup) still override this immediately after.
+        modes_enabled={"professional": app_id not in DATING_ONLY_APP_IDS,
+                       "sparks": app_id in DATING_ONLY_APP_IDS},
         account_status='active',
     )
     db.session.add(account)
@@ -112,13 +119,20 @@ def create_account(phone: str, display_name: str) -> Account:
 def create_account_email(email: str, display_name: str) -> Account:
     """Create a new account with email as the primary identifier (no phone required)."""
     handle = generate_handle(display_name, email)
+    app_id = resolve_app_id()
     account = Account(
         id=str(uuid.uuid4()),
         handle=handle,
         display_name=display_name,
         email=email,
         email_verified=1,
-        modes_enabled={"professional": True, "sparks": False},
+        app_id=app_id,
+        # Dating-only brands (Abanoonya Pro, Uganda Dating App) default
+        # straight into Sparks with Professional off, rather than the LinkUp
+        # default. Callers that pass their own modes_enabled explicitly (see
+        # identity/routes.py signup) still override this immediately after.
+        modes_enabled={"professional": app_id not in DATING_ONLY_APP_IDS,
+                       "sparks": app_id in DATING_ONLY_APP_IDS},
         account_status='active',
     )
     db.session.add(account)

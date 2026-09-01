@@ -263,7 +263,7 @@ a:hover { color: var(--accent-hover); }
 }
 .brand-mark {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%);
+  object-fit: contain;
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   color: #fff;

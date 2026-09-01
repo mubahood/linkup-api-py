@@ -1,7 +1,9 @@
 """
 Profile service: profile CRUD, completion score, onboarding steps.
 """
+from __future__ import annotations
 from backend.domains.profile.models import ProfessionalProfile, DatingProfile, Education, Experience
+from backend.shared.app_brand import DATING_ONLY_APP_IDS
 
 # ── Ordered onboarding step definitions ──────────────────────────────────────
 # Each step maps to a `checks` key and carries UX copy + point value.
@@ -16,13 +18,22 @@ _STEPS = [
         'priority': 1,
     },
     {
+        'id': 'phone',
+        'check_key': 'phone_number',
+        'title': 'Add your phone number',
+        'description': 'Needed to receive payments and reach you — never shown publicly',
+        'icon': 'phone_outlined',
+        'points': 10,
+        'priority': 2,
+    },
+    {
         'id': 'interests',
         'check_key': 'interests_added',
         'title': 'Choose your interests',
         'description': 'Pick 5+ interests across 3 areas to power your recommendations',
         'icon': 'interests',
         'points': 15,
-        'priority': 2,
+        'priority': 3,
     },
     {
         'id': 'headline',
@@ -31,7 +42,7 @@ _STEPS = [
         'description': 'Tell people what you do — "Software Engineer @ MTN · Makerere \'19"',
         'icon': 'title',
         'points': 10,
-        'priority': 3,
+        'priority': 4,
     },
     {
         'id': 'experience',
@@ -40,7 +51,7 @@ _STEPS = [
         'description': 'Showcase your career journey and attract better opportunities',
         'icon': 'work_outline',
         'points': 15,
-        'priority': 4,
+        'priority': 5,
     },
     {
         'id': 'education',
@@ -49,7 +60,7 @@ _STEPS = [
         'description': 'Connect with alumni from your university or college',
         'icon': 'school_outlined',
         'points': 15,
-        'priority': 5,
+        'priority': 6,
     },
     {
         'id': 'bio',
@@ -58,7 +69,7 @@ _STEPS = [
         'description': 'Share your story, mission, and what you\'re looking for',
         'icon': 'edit_note',
         'points': 15,
-        'priority': 6,
+        'priority': 7,
     },
     {
         'id': 'current_role',
@@ -67,7 +78,85 @@ _STEPS = [
         'description': 'Help people understand where you work and what you do',
         'icon': 'badge_outlined',
         'points': 10,
+        'priority': 8,
+    },
+]
+
+# Dating-only brands (Abanoonya) have no work/education/current-role surface at
+# all in the app — scoring those steps left a fully-completed dating profile
+# stuck at 0%. This checklist mirrors what the dating wizard actually collects.
+_DATING_STEPS = [
+    {
+        'id': 'photos',
+        'check_key': 'dating_photos',
+        'title': 'Add your photos',
+        'description': 'Real photos get far more matches — add at least 2',
+        'icon': 'photo_camera',
+        'points': 20,
+        'priority': 1,
+    },
+    {
+        'id': 'phone',
+        'check_key': 'phone_number',
+        'title': 'Add your phone number',
+        'description': 'Needed for payments and WhatsApp reveals — never shown publicly',
+        'icon': 'phone_outlined',
+        'points': 10,
+        'priority': 2,
+    },
+    {
+        'id': 'about_you',
+        'check_key': 'dating_about',
+        'title': 'Tell us about you',
+        'description': 'Your age, gender and orientation — the basics',
+        'icon': 'person',
+        'points': 15,
+        'priority': 3,
+    },
+    {
+        'id': 'dating_bio',
+        'check_key': 'dating_bio',
+        'title': 'Write your bio',
+        'description': 'Say a bit about yourself so people know who you are',
+        'icon': 'edit_note',
+        'points': 15,
+        'priority': 4,
+    },
+    {
+        'id': 'location',
+        'check_key': 'dating_location',
+        'title': 'Add your location',
+        'description': 'Helps us match you with people nearby',
+        'icon': 'location_on',
+        'points': 10,
+        'priority': 5,
+    },
+    {
+        'id': 'interests',
+        'check_key': 'interests_added',
+        'title': 'Choose your interests',
+        'description': 'Pick 5 or more — powers your matches',
+        'icon': 'interests',
+        'points': 15,
+        'priority': 6,
+    },
+    {
+        'id': 'preferences',
+        'check_key': 'dating_preferences',
+        'title': 'Set who you want to meet',
+        'description': 'Tell us who you are looking for',
+        'icon': 'tune',
+        'points': 15,
         'priority': 7,
+    },
+    {
+        'id': 'prompts',
+        'check_key': 'dating_prompts',
+        'title': 'Add a profile prompt',
+        'description': 'A fun answer helps you stand out',
+        'icon': 'chat_bubble_outline',
+        'points': 10,
+        'priority': 8,
     },
 ]
 
@@ -141,6 +230,13 @@ def calculate_completion(
     """
     Calculate profile completion score (0–100) and return ordered onboarding steps.
 
+    Dating-only brands (Abanoonya Pro, Uganda Dating App —
+    `account.app_id in DATING_ONLY_APP_IDS`) have no work/education/
+    current-role surface in the app at all, so they're scored against
+    `_DATING_STEPS` (photos, bio, about-you, location, interests,
+    preferences, prompts) instead of the professional `_STEPS` checklist —
+    otherwise a fully-completed dating profile reads as 0% complete.
+
     Parameters
     ----------
     account          : Account model instance
@@ -149,12 +245,22 @@ def calculate_completion(
     exp_list         : list of Experience records
     interests_count  : number of interest tags the user has selected
     """
+    is_dating_only = getattr(account, 'app_id', None) in DATING_ONLY_APP_IDS
     score = 0
     checks = {}
 
     # ── Account basics ────────────────────────────────────────────────────
     checks['avatar'] = bool(account.avatar)
-    if checks['avatar']:
+    if checks['avatar'] and not is_dating_only:
+        score += 10
+
+    # A phone number matters for both brands — it's how mobile-money
+    # payments identify the customer (Flutterwave Uganda checkout) and how
+    # WhatsApp reveals work. Collected as a plain, self-reported field (like
+    # email edits already are) — no OTP round-trip, since this backend has
+    # no SMS-sending integration to actually deliver a verification code.
+    checks['phone_number'] = bool(account.phone)
+    if checks['phone_number']:
         score += 10
 
     checks['email_verified'] = bool(getattr(account, 'email_verified', False))
@@ -174,27 +280,50 @@ def calculate_completion(
     if checks['interests_added']:
         score += 15
 
-    # ── Professional profile ──────────────────────────────────────────────
-    if prof_profile:
-        checks['headline'] = bool(prof_profile.headline)
-        checks['bio'] = bool(prof_profile.bio and len(prof_profile.bio.strip()) >= 10)
-        checks['current_role'] = bool(prof_profile.current_role)
-        checks['location'] = bool(prof_profile.location_id)
-        checks['seniority'] = bool(prof_profile.seniority)
+    if is_dating_only:
+        # ── Dating profile ──────────────────────────────────────────────
+        dp = dating_profile
+        checks['dating_photos'] = bool(dp and dp.photos and len(dp.photos) >= 2)
+        checks['dating_about'] = bool(
+            dp and dp.birth_year and dp.gender and dp.sexual_orientation
+        )
+        checks['dating_bio'] = bool(dp and dp.bio and len(dp.bio.strip()) >= 10)
+        checks['dating_location'] = bool(dp and dp.district_id)
+        checks['dating_preferences'] = bool(dp and dp.preferences)
+        checks['dating_prompts'] = bool(dp and dp.prompts and len(dp.prompts) >= 1)
+
+        if checks['dating_photos']:      score += 20
+        if checks['dating_about']:       score += 15
+        if checks['dating_bio']:         score += 15
+        if checks['dating_location']:    score += 10
+        if checks['dating_preferences']: score += 15
+        if checks['dating_prompts']:     score += 10
+
+        steps_def = _DATING_STEPS
     else:
-        for k in ('headline', 'bio', 'current_role', 'location', 'seniority'):
-            checks[k] = False
+        # ── Professional profile ────────────────────────────────────────
+        if prof_profile:
+            checks['headline'] = bool(prof_profile.headline)
+            checks['bio'] = bool(prof_profile.bio and len(prof_profile.bio.strip()) >= 10)
+            checks['current_role'] = bool(prof_profile.current_role)
+            checks['location'] = bool(prof_profile.location_id)
+            checks['seniority'] = bool(prof_profile.seniority)
+        else:
+            for k in ('headline', 'bio', 'current_role', 'location', 'seniority'):
+                checks[k] = False
 
-    if checks['headline']:    score += 10
-    if checks['bio']:         score += 15
-    if checks['current_role']: score += 10
-    if checks['seniority']:   score += 5  # bonus, not in step list
+        if checks['headline']:    score += 10
+        if checks['bio']:         score += 15
+        if checks['current_role']: score += 10
+        if checks['seniority']:   score += 5  # bonus, not in step list
 
-    # ── Education & Experience ────────────────────────────────────────────
-    checks['education']   = bool(edu_list)
-    checks['experience']  = bool(exp_list)
-    if checks['education']:   score += 15
-    if checks['experience']:  score += 15
+        # ── Education & Experience ──────────────────────────────────────
+        checks['education']   = bool(edu_list)
+        checks['experience']  = bool(exp_list)
+        if checks['education']:   score += 15
+        if checks['experience']:  score += 15
+
+        steps_def = _STEPS
 
     # ── Build ordered onboarding steps ───────────────────────────────────
     onboarding_steps = [
@@ -202,7 +331,7 @@ def calculate_completion(
             **step,
             'done': checks.get(step['check_key'], False),
         }
-        for step in _STEPS
+        for step in steps_def
     ]
 
     missing_fields = [k for k, v in checks.items() if not v]

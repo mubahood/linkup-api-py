@@ -48,6 +48,11 @@ class Match(db.Model):
 
     def to_dict(self, viewer_id=None):
         other = self.account_b if viewer_id == self.account_a_id else self.account_a
+        other_dict = other.to_dict() if other else None
+        if other_dict is not None:
+            # Boolean, not the raw kyc_level (withheld by to_dict()'s safe
+            # default) — the match-profile screen's verified badge reads this.
+            other_dict['is_verified'] = bool((other.kyc_level or 0) >= 2)
         return {
             'id': self.id,
             'account_a_id': self.account_a_id,
@@ -56,6 +61,6 @@ class Match(db.Model):
             'state': self.state or 'active',
             'met_at': self.met_at.isoformat() if self.met_at else None,
             'unmatched_at': self.unmatched_at.isoformat() if self.unmatched_at else None,
-            'other_account': other.to_dict() if other else None,
+            'other_account': other_dict,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

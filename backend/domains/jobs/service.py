@@ -35,6 +35,7 @@ Final match_pct = round(score * 100), capped at 99.
 
 The function is called by GET /v1/jobs/for-you.
 """
+from __future__ import annotations
 from datetime import datetime, timedelta
 from backend.domains.jobs.models import Job, Application, SavedJob
 

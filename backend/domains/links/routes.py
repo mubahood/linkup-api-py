@@ -140,6 +140,9 @@ def accept_request(account, link_id):
     link.status = 'accepted'
     db.session.commit()
 
+    from backend.shared.events.emit import emit
+    emit('link.accept', account_id=account.id, object_type='account', object_id=link.requester_id)
+
     # Notify the requester that their request was accepted
     try:
         from backend.domains.notifications.service import create_notification

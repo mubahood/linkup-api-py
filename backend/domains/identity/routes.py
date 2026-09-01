@@ -15,12 +15,34 @@ from backend.domains.identity.service import (
     issue_tokens, _hash_code
 )
 from backend.shared.auth.decorators import lu_jwt_required
+from backend.shared.storage.r2 import save_upload
 from backend.shared.utils.response import success_response, error_response
 
 identity_bp = Blueprint('v1_identity', __name__, url_prefix='/v1/auth')
 
 
+def _send_welcome_notification(account) -> None:
+    """First thing a new account sees in their notification list (and, once
+    their device has a valid push subscription, on their phone even before
+    they've opened the app again) — 'spark.' prefix so it renders with the
+    same warm gradient tile as a match, not a generic bell icon. Best-effort:
+    a notification failure must never block account creation."""
+    try:
+        from backend.domains.notifications.service import create_notification
+        first_name = (account.display_name or 'there').split(' ')[0]
+        create_notification(
+            account_id=account.id,
+            notif_type='spark.welcome',
+            title=f'Welcome to Abanoonya Pro, {first_name}! 🎉',
+            body='Finish your profile to start getting real Sparks near you.',
+            action_url='/sparks',
+        )
+    except Exception:
+        pass
+
+
 @identity_bp.route('/register', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def register():
     """Register: email (or phone) + display_name → sends OTP."""
     data = request.get_json(silent=True) or {}
@@ -45,7 +67,7 @@ def register():
             send_otp_email(email, name, code, 'register')
         except Exception as e:
             logger.error(f'[Register] email send failed: {e}')
-        logger.info(f'[Register] OTP for {email}: {code} (dev)')
+        logger.info(f'[Register] OTP sent to {email}')
         return success_response('Verification code sent to your email.', {'email': email})
     else:
         existing = Account.query.filter_by(phone=phone).filter(
@@ -54,11 +76,12 @@ def register():
         if existing:
             return error_response('An account with this phone number already exists.')
         code = create_otp(phone, purpose='register')
-        logger.info(f'[Register] OTP for {phone}: {code} (dev)')
+        logger.info(f'[Register] OTP sent to {phone}')
         return success_response('OTP sent to your phone.', {'phone': phone})
 
 
 @identity_bp.route('/signup', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def signup():
     """Direct registration — no OTP.
     Body: { name|display_name, gender(male|female), email, password, modes_enabled? }.
@@ -108,12 +131,13 @@ def signup():
     db.session.commit()
 
     tokens = issue_tokens(account)
-    payload = {**account.to_dict(), **tokens, 'is_new_account': True}
+    payload = {**account.to_dict(include_private=True), **tokens, 'is_new_account': True}
     try:
         from backend.shared.email.service import send_welcome_email
         send_welcome_email(account.email, account.display_name, account.handle)
     except Exception:
         pass
+    _send_welcome_notification(account)
     return success_response('Account created.', payload)
 
 
@@ -160,14 +184,15 @@ def otp_request():
             send_otp_email(email, name, code, purpose)
         except Exception as e:
             logger.error(f'[OTP] email send failed: {e}')
-        logger.info(f'[OTP] {email} → {code} (purpose={purpose})')
+        logger.info(f'[OTP] sent to {email} (purpose={purpose})')
         return success_response(f'Verification code sent to {email}.')
     else:
-        logger.info(f'[OTP] {phone} → {code} (purpose={purpose})')
+        logger.info(f'[OTP] sent to {phone} (purpose={purpose})')
         return success_response('OTP sent to your phone.')
 
 
 @identity_bp.route('/otp/verify', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def otp_verify():
     """Verify OTP → create account if needed, return tokens."""
     data = request.get_json(silent=True) or {}
@@ -236,7 +261,7 @@ def otp_verify():
         db.session.commit()
 
     tokens = issue_tokens(account)
-    payload = {**account.to_dict(), **tokens, 'is_new_account': is_new}
+    payload = {**account.to_dict(include_private=True), **tokens, 'is_new_account': is_new}
 
     if is_new and account.email:
         try:
@@ -244,11 +269,14 @@ def otp_verify():
             send_welcome_email(account.email, account.display_name, account.handle)
         except Exception:
             pass
+    if is_new:
+        _send_welcome_notification(account)
 
     return success_response('Verification successful.', payload)
 
 
 @identity_bp.route('/login', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def login():
     """Login via OTP (primary) or password (fallback). Accepts email or phone."""
     data = request.get_json(silent=True) or {}
@@ -270,31 +298,33 @@ def login():
             Account.deleted_at.is_(None)
         ).first()
 
-    if not account:
-        return error_response('No account found.')
-
     # Suspension check relaxed for now (dev) — suspended accounts can still log in.
     # if account.account_status != 'active':
     #     return error_response('Your account has been suspended.')
 
+    # An account lookup miss is deliberately handled inside each branch below
+    # with the SAME message/status a real account would get for a wrong
+    # code/password, rather than an early "No account found." — otherwise a
+    # login attempt becomes a free oracle for which emails/phones are
+    # registered (mirrors the existing safe pattern in
+    # password_reset_request(), which never confirms/denies existence).
     if code:
-        ok, msg = verify_otp(identifier, code, purpose='login')
+        ok, msg = verify_otp(identifier, code, purpose='login') if account else (False, None)
         if not ok:
-            return error_response(msg)
+            return error_response(msg or 'Invalid OTP code.')
     elif password:
-        if not account.check_password(password):
+        if not account or not account.check_password(password):
             # 401 (auth failure) is the correct status — not 400 (bad request).
             return error_response('Incorrect email or password.', status_code=401)
     else:
-        create_otp(identifier, purpose='login')
-        if email:
-            try:
-                from backend.shared.email.service import send_otp_email
-                send_otp_email(email, account.display_name,
-                               __import__('backend.domains.identity.service',
-                                          fromlist=['DEV_OTP']).DEV_OTP, 'login')
-            except Exception:
-                pass
+        if account:
+            otp_code = create_otp(identifier, purpose='login')
+            if email:
+                try:
+                    from backend.shared.email.service import send_otp_email
+                    send_otp_email(email, account.display_name, otp_code, 'login')
+                except Exception:
+                    pass
         return success_response('OTP sent.', {
             'requires_otp': True,
             'email': email or None,
@@ -302,14 +332,16 @@ def login():
         })
 
     tokens = issue_tokens(account)
-    return success_response('Login successful.', {**account.to_dict(), **tokens})
+    return success_response('Login successful.', {**account.to_dict(include_private=True), **tokens})
 
 
 @identity_bp.route('/me', methods=['GET'])
 @lu_jwt_required
 def me(account):
     """Get current authenticated account."""
-    return success_response('Account loaded.', account.to_dict())
+    payload = account.to_dict(include_private=True)
+    payload['latest_verification'] = _latest_verification_dict(account.id)
+    return success_response('Account loaded.', payload)
 
 
 @identity_bp.route('/logout', methods=['POST'])
@@ -330,17 +362,32 @@ def logout(account):
     return success_response('Logged out successfully.')
 
 
+def _latest_verification_dict(account_id: str):
+    """Most recent KYC submission for this account — so the mobile app can
+    show why a submission was rejected (and that the form should reopen for
+    resubmission), not just the bare kyc_level number."""
+    from backend.domains.identity.models import Verification
+    v = (Verification.query.filter_by(account_id=account_id)
+         .order_by(Verification.created_at.desc()).first())
+    return v.to_dict() if v else None
+
+
 @identity_bp.route('/kyc/advance', methods=['POST'])
 @lu_jwt_required
+@rate_limit(10, 60)
 def kyc_advance(account):
     """
     Advance KYC level.
-    L0 → L1: phone verified (already done on registration)
-    L1 → L2: submit national ID number
-    L2 → L3: admin/automated verification (placeholder)
+    L0 → L1: phone verified (already done on registration) — plain POST, no body.
+    L1 → L2: submit national ID + a photo of the ID and a selfie for a human
+              admin to visually compare (multipart/form-data: national_id,
+              id_photo, selfie) — sets kyc_level=2 ("submitted, pending
+              review", not "verified"; only L3 below means verified).
+    L2 → L3: admin-only, via PUT /admin/v1/kyc/<id>/decide (decide_kyc).
     """
+    from backend.domains.identity.models import Verification
+
     current_level = account.kyc_level or 0
-    data = request.get_json(silent=True) or {}
 
     if current_level == 0:
         if account.phone_verified:
@@ -352,28 +399,40 @@ def kyc_advance(account):
                     send_kyc_email(account.email, account.display_name, 1)
                 except Exception:
                     pass
-            return success_response('KYC Level 1 unlocked — phone verified.', account.to_dict())
+            return success_response('KYC Level 1 unlocked — phone verified.', account.to_dict(include_private=True))
         return error_response('Phone not yet verified. Verify your phone first.')
 
     if current_level == 1:
-        # L1 → L2: submit national ID
-        national_id = (data.get('national_id') or '').strip()
+        # L1 → L2: submit national ID + ID photo + selfie
+        national_id = (request.form.get('national_id') or '').strip()
+        id_photo = request.files.get('id_photo')
+        selfie = request.files.get('selfie')
+
         if not national_id:
             return error_response('national_id is required to advance to Level 2.')
         if len(national_id) < 6:
             return error_response('Invalid national ID format.')
-        # Store in verifications table (placeholder)
-        from datetime import datetime
-        from backend.models import db as _db
-        _db.session.execute(
-            _db.text(
-                "INSERT IGNORE INTO lu_verifications (id, account_id, type, status, metadata, created_at) "
-                "VALUES (:id, :aid, 'national_id', 'pending', :meta, :now)"
-            ),
-            {'id': str(__import__('uuid').uuid4()), 'aid': account.id,
-             'meta': f'{{"national_id":"{national_id}"}}',
-             'now': datetime.utcnow()}
+        if not id_photo:
+            return error_response('A photo of your ID is required.')
+        if not selfie:
+            return error_response('A selfie is required to verify your identity.')
+
+        id_photo_url = save_upload(id_photo, folder=f'kyc_verifications/{account.id}')
+        if not id_photo_url:
+            return error_response('Failed to upload ID photo. Please use JPG, PNG, or WebP.')
+        selfie_url = save_upload(selfie, folder=f'kyc_verifications/{account.id}')
+        if not selfie_url:
+            return error_response('Failed to upload selfie. Please use JPG, PNG, or WebP.')
+
+        verification = Verification(
+            account_id=account.id,
+            type='national_id',
+            status='pending',
+            metadata_json={'national_id': national_id},
+            id_photo_url=id_photo_url,
+            selfie_url=selfie_url,
         )
+        db.session.add(verification)
         account.kyc_level = 2
         db.session.commit()
         if account.email:
@@ -382,16 +441,18 @@ def kyc_advance(account):
                 send_kyc_email(account.email, account.display_name, 2)
             except Exception:
                 pass
-        return success_response('KYC Level 2 submitted — National ID under review.', account.to_dict())
+        payload = account.to_dict(include_private=True)
+        payload['latest_verification'] = verification.to_dict()
+        return success_response('Submitted — your ID is under review.', payload)
 
     if current_level == 2:
-        # L2 → L3: placeholder (requires admin/NIRA integration)
-        return error_response('Level 3 verification requires identity verification via NIRA. Contact support.')
+        return error_response('Your ID is already under review. You’ll be notified once it’s decided.')
 
     return error_response(f'Already at maximum KYC level ({current_level}).')
 
 
 @identity_bp.route('/password/reset/request', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def password_reset_request():
     """Request a password reset OTP. Accepts email or phone."""
     data = request.get_json(silent=True) or {}
@@ -413,7 +474,7 @@ def password_reset_request():
     if not account:
         return success_response('If this address is registered, a reset code will be sent.')
     code = create_otp(identifier, purpose='reset')
-    logger.info(f'[PasswordReset] OTP for {identifier}: {code} (dev log)')
+    logger.info(f'[PasswordReset] OTP sent to {identifier}')
 
     if email:
         # Send synchronously so we report the TRUE delivery result instead of
@@ -431,11 +492,16 @@ def password_reset_request():
                 'in a moment or contact support.', status_code=502)
         return success_response('Reset code sent — check your email inbox (and spam).')
 
-    # Phone path (SMS not wired in dev) — code is logged above.
+    # Phone path: no SMS gateway is wired up anywhere in this codebase, so
+    # this response is a false positive — nothing is actually delivered.
+    # Unreachable from the live app today (its OTP UI is email-only); flagged
+    # here rather than fixed since wiring a real SMS provider is a separate,
+    # larger decision.
     return success_response('Reset code sent.')
 
 
 @identity_bp.route('/password/reset', methods=['POST'])
+@rate_limit(10, 60, body_field='email')
 def password_reset():
     """Verify OTP + set new password. Accepts email or phone."""
     data = request.get_json(silent=True) or {}
@@ -474,7 +540,7 @@ def password_reset():
 @identity_bp.route('/me', methods=['PUT'])
 @lu_jwt_required
 def update_me(account):
-    """Update account settings: display_name, email, modes_enabled."""
+    """Update account settings: display_name, email, phone, modes_enabled."""
     data = request.get_json(silent=True) or {}
 
     if 'display_name' in data:
@@ -483,11 +549,34 @@ def update_me(account):
             return error_response('Display name must be at least 2 characters.')
         account.display_name = dn
 
+    if 'phone' in data:
+        raw = (data['phone'] or '').strip()
+        if raw:
+            from backend.services.flutterwave_service import FlutterwaveService
+            phone = FlutterwaveService.normalize_phone_ug(raw)
+            if len(phone) != 12 or not phone.startswith('256'):
+                return error_response('Enter a valid Ugandan phone number.')
+            # Older/seeded rows may still hold a '+256…' variant — match both
+            # so this check can't be defeated by a pre-existing format
+            # mismatch (phone has no other normalisation pass anywhere else
+            # in this codebase to rely on).
+            existing = Account.query.filter(
+                Account.phone.in_([phone, f'+{phone}']),
+                Account.id != account.id,
+                Account.deleted_at.is_(None),
+            ).first()
+            if existing:
+                return error_response('This phone number is already in use.')
+            account.phone = phone
+            # Plain, self-reported like an email edit — no OTP round-trip,
+            # since this backend has no SMS-sending integration to actually
+            # deliver a code (phone_request/verify only ever logs it today).
+            account.phone_verified = 0
+
     if 'email' in data:
         email = (data['email'] or '').strip().lower()
         if email:
-            # Check uniqueness
-            from backend.domains.identity.models import Account
+            # Check uniqueness (Account is already imported at module level)
             existing = Account.query.filter(
                 Account.email == email,
                 Account.id != account.id,
@@ -509,7 +598,7 @@ def update_me(account):
             account.modes_enabled = current
 
     db.session.commit()
-    return success_response('Account updated.', account.to_dict())
+    return success_response('Account updated.', account.to_dict(include_private=True))
 
 
 @identity_bp.route('/password', methods=['POST'])
@@ -675,12 +764,29 @@ def update_location(account):
 def account_presence(account, account_id):
     """
     GET /v1/auth/accounts/:id/presence
-    Lightweight presence check — returns is_online + last_seen_at for any account.
+    Lightweight presence check — returns is_online + last_seen_at.
     Called every 30 s from the open chat thread screen to keep status fresh.
+
+    Gated to accounts that actually share a chat thread with the caller —
+    without this, any authenticated user could poll any other account_id's
+    online status / last-seen time for free-form stalking, since account IDs
+    are visible all over the app (post authors, hub members, etc.).
     """
+    if account_id != account.id:
+        from backend.domains.chat.models import ThreadParticipant
+        my_thread_ids = db.session.query(ThreadParticipant.thread_id).filter_by(
+            account_id=account.id
+        ).subquery()
+        shares_thread = db.session.query(ThreadParticipant.id).filter(
+            ThreadParticipant.account_id == account_id,
+            ThreadParticipant.thread_id.in_(db.session.query(my_thread_ids.c.thread_id)),
+        ).first() is not None
+        if not shares_thread:
+            return error_response('Account not found.', status_code=404)
+
     target = db.session.get(Account, account_id)
     if not target or target.deleted_at:
-        return error_response('Account not found.', 404)
+        return error_response('Account not found.', status_code=404)
     return success_response('Presence loaded.', {
         'id':           target.id,
         'is_online':    target.is_online(),

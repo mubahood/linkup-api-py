@@ -1,0 +1,14 @@
+[Unit]
+Description=Re-engagement push notification job (LinkUp / Abanoonya Pro / Uganda Dating App)
+After=network.target mariadb.service abanoonya.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/www/abanoonya.u-lits.com/app
+EnvironmentFile=/var/www/abanoonya.u-lits.com/app/.env
+ExecStart=/var/www/abanoonya.u-lits.com/app/.venv/bin/python background_engagement_job.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=engagement-job

@@ -22,6 +22,21 @@ OTP_EXPIRY_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
 
 
+def _grant_launch_promo_if_active(account: Account) -> None:
+    """Every account created before LAUNCH_PROMO_CUTOFF gets the top plan
+    free for a month — see subscriptions/service.py. Local import (not at
+    module top) to avoid a circular import between identity and
+    subscriptions; best-effort so a promo hiccup never blocks signup itself."""
+    try:
+        from backend.domains.subscriptions.service import (
+            is_launch_promo_active, grant_launch_promo,
+        )
+        if is_launch_promo_active():
+            grant_launch_promo(account)
+    except Exception:
+        logger.exception(f'[LaunchPromo] Failed to grant promo for new account {account.id}')
+
+
 def _hash_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
@@ -113,6 +128,7 @@ def create_account(phone: str, display_name: str) -> Account:
     )
     db.session.add(account)
     db.session.commit()
+    _grant_launch_promo_if_active(account)
     return account
 
 
@@ -137,6 +153,7 @@ def create_account_email(email: str, display_name: str) -> Account:
     )
     db.session.add(account)
     db.session.commit()
+    _grant_launch_promo_if_active(account)
     return account
 
 

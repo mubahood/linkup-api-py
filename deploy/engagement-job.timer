@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the re-engagement push job daily, 10am Uganda time
+
+[Timer]
+# 07:00 UTC = 10:00 EAT (Uganda, UTC+3, no DST) — well clear of the app's
+# own 10pm-8am quiet-hours window, and a normal late-morning time people
+# actually look at their phone.
+OnCalendar=*-*-* 07:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

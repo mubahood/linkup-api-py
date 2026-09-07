@@ -15,9 +15,67 @@ from backend.domains.subscriptions.models import SubscriptionPlan, Subscription
 
 _FREE_CODE = 'free'
 
+# ── Launch promo: everyone gets the top plan free for a month, through
+# end-of-September 2026 ──────────────────────────────────────────────────────
+# Applies to every account across all three apps (LinkUp, Abanoonya Pro,
+# Uganda Dating App) — both the existing base (via backfill_launch_promo.py,
+# run once) and every new signup up to the cutoff (via the hook in
+# identity/service.py's create_account / create_account_email). Additive on
+# top of whatever time an account already has banked, regardless of which
+# plan they were on — an existing paying subscriber's time is extended, not
+# replaced or shortened.
+LAUNCH_PROMO_CUTOFF = datetime(2026, 10, 1)
+LAUNCH_PROMO_DAYS = 30
+
+
+def is_launch_promo_active() -> bool:
+    return datetime.utcnow() < LAUNCH_PROMO_CUTOFF
+
 
 def _get_free_plan(app_id: str) -> SubscriptionPlan | None:
     return SubscriptionPlan.query.filter_by(app_id=app_id, code=_FREE_CODE, active=1).first()
+
+
+def _get_top_plan(app_id: str) -> SubscriptionPlan | None:
+    """Highest-tier active plan for an app, by sort_order — data-driven so
+    this never has to be updated by hand if a plan catalog changes."""
+    return (SubscriptionPlan.query.filter_by(app_id=app_id, active=1)
+            .order_by(SubscriptionPlan.sort_order.desc()).first())
+
+
+def grant_launch_promo(account) -> Subscription | None:
+    """Grant the account LAUNCH_PROMO_DAYS of the top plan for its app, free.
+    Idempotent — checks for an existing promo grant first, so it's safe to
+    call again for an account that already has one (a re-run of the backfill
+    script, or a signup path called twice) without double-extending."""
+    tx_ref = f'PROMO-LAUNCH-{account.id}'
+    if Subscription.query.filter_by(tx_ref=tx_ref).first():
+        return None
+
+    top_plan = _get_top_plan(account.app_id)
+    if not top_plan:
+        return None
+
+    now = datetime.utcnow()
+    base = account.subscription_expires_at if (
+        account.subscription_expires_at and account.subscription_expires_at > now
+    ) else now
+    expires_at = base + timedelta(days=LAUNCH_PROMO_DAYS)
+
+    sub = Subscription(
+        id=str(uuid.uuid4()), account_id=account.id, plan_id=top_plan.id,
+        status='active', starts_at=now, expires_at=expires_at,
+        amount_paid_ugx=0, tx_ref=tx_ref,
+        extra_data={'kind': 'promo', 'name': 'launch_premium_sept_2026'},
+    )
+    db.session.add(sub)
+
+    account.subscription_plan_id = top_plan.id
+    account.subscription_expires_at = expires_at
+    account.is_premium = 1
+
+    db.session.commit()
+    return sub
 
 
 def _downgrade_to_free(account) -> None:
